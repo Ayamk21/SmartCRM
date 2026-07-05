@@ -1,0 +1,17 @@
+{
+  "name": "smart-crm-copilot",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Smart CRM Copilot - SaaS multitenant avec Copilot IA pour freelances et petites agences",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:frontend": "npm run dev --workspace=apps/frontend",
+    "dev:backend": "npm run start:dev --workspace=apps/backend"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}
