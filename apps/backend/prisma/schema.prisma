@@ -1,13 +1,76 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  COLLABORATOR
+}
+
+enum PlanType {
+  FREE
+  PRO
+}
+
+/// Un Tenant = un compte agence/freelance (le "workspace"). Toutes les autres
+/// tables metier (contacts, deals, devis...) porteront un tenantId qui pointe
+/// ici, c'est la base de l'isolation multitenant.
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  logoUrl     String?
+  currency    String   @default("EUR")
+  siret       String?
+  pdfTemplate String?
+  plan        PlanType @default(FREE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[]
+
+  @@map("tenants")
+}
+
+/// Un utilisateur appartient a exactement un Tenant. L'email sert d'identifiant
+/// de connexion, il est donc unique globalement (pas seulement par tenant).
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String?
+  lastName  String?
+  role      Role     @default(COLLABORATOR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  sessions Session[]
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+/// Une Session = un refresh token actif. Le refresh token en clair n'est jamais
+/// stocke (seulement son hash) : meme en cas de fuite de la base, les sessions
+/// ne sont pas directement reutilisables.
+model Session {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
 }
