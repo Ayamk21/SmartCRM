@@ -1,11 +1,6 @@
 import { Prisma } from '../../generated/prisma/client';
 import { TenantContextService } from '../tenant/tenant-context.service';
 
-/**
- * Liste blanche des modeles Prisma qui portent une colonne tenantId.
- * A completer au fur et a mesure (Contact, Deal, Quote, Invoice...).
- * Le modele Tenant lui-meme n'y figure jamais : c'est lui qui EST le tenant.
- */
 const TENANT_SCOPED_MODELS = new Set(['User']);
 
 const READ_OR_DELETE_OPS = new Set([
@@ -23,13 +18,6 @@ const READ_OR_DELETE_OPS = new Set([
   'deleteMany',
 ]);
 
-/**
- * Extension Prisma qui injecte automatiquement `tenantId` dans le `where`
- * (lectures/mises a jour/suppressions) et dans le `data` (creations) de
- * toute requete visant un modele de TENANT_SCOPED_MODELS. Le tenantId vient
- * du TenantContextService (donc de TenantContextService.run(...)) : si aucun
- * contexte n'est actif, l'operation echoue au lieu de s'executer sans filtre.
- */
 export function tenantScopingExtension(tenantContext: TenantContextService) {
   return Prisma.defineExtension((client) =>
     client.$extends({

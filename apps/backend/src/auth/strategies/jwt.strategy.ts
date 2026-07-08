@@ -14,7 +14,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  /** La valeur retournee devient `request.user`. */
   validate(payload: AuthenticatedUser): AuthenticatedUser {
     return { sub: payload.sub, tenantId: payload.tenantId, role: payload.role };
   }

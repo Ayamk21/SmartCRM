@@ -16,6 +16,10 @@ interface IssuedTokens {
   refreshToken: string;
 }
 
+interface IssuedTokensWithUser extends IssuedTokens {
+  user: { id: string; email: string; role: string };
+}
+
 @Injectable()
 export class AuthService {
   private readonly refreshTtlDays: number;
@@ -82,7 +86,7 @@ export class AuthService {
     };
   }
 
-  async refresh(refreshToken: string): Promise<IssuedTokens> {
+  async refresh(refreshToken: string): Promise<IssuedTokensWithUser> {
     const tokenHash = this.hashToken(refreshToken);
     const session = await this.prisma.raw.session.findUnique({
       where: { tokenHash },
@@ -93,17 +97,24 @@ export class AuthService {
       throw new UnauthorizedException('Session invalide ou expiree.');
     }
 
-    // Rotation : l'ancien refresh token est immediatement invalide.
     await this.prisma.raw.session.update({
       where: { id: session.id },
       data: { revokedAt: new Date() },
     });
 
-    return this.issueSession(
+    const tokens = await this.issueSession(
       session.user.id,
       session.user.tenantId,
       session.user.role,
     );
+    return {
+      ...tokens,
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        role: session.user.role,
+      },
+    };
   }
 
   async logout(refreshToken: string): Promise<void> {

@@ -53,9 +53,9 @@ export class AuthController {
     if (!token) {
       throw new UnauthorizedException('Aucune session active.');
     }
-    const { accessToken, refreshToken } = await this.authService.refresh(token);
+    const { accessToken, refreshToken, user } = await this.authService.refresh(token);
     this.setRefreshCookie(res, refreshToken);
-    return { accessToken };
+    return { accessToken, user };
   }
 
   @Public()

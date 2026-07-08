@@ -18,9 +18,6 @@ enum PlanType {
   PRO
 }
 
-/// Un Tenant = un compte agence/freelance (le "workspace"). Toutes les autres
-/// tables metier (contacts, deals, devis...) porteront un tenantId qui pointe
-/// ici, c'est la base de l'isolation multitenant.
 model Tenant {
   id          String   @id @default(cuid())
   name        String
@@ -37,8 +34,6 @@ model Tenant {
   @@map("tenants")
 }
 
-/// Un utilisateur appartient a exactement un Tenant. L'email sert d'identifiant
-/// de connexion, il est donc unique globalement (pas seulement par tenant).
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -58,9 +53,6 @@ model User {
   @@map("users")
 }
 
-/// Une Session = un refresh token actif. Le refresh token en clair n'est jamais
-/// stocke (seulement son hash) : meme en cas de fuite de la base, les sessions
-/// ne sont pas directement reutilisables.
 model Session {
   id         String    @id @default(cuid())
   tokenHash  String    @unique

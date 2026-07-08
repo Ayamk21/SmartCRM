@@ -7,13 +7,7 @@ import { tenantScopingExtension } from './tenant-scoping.extension';
 
 @Injectable()
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
-  /** Client Prisma brut, non filtre : reserve au modele Tenant et a l'auth
-   * (recherche d'un user par email avant de connaitre son tenant). */
   public readonly raw: PrismaClient;
-
-  /** Client Prisma filtre automatiquement par tenant courant (cf.
-   * TenantContextService) : a utiliser pour tout modele "metier" (User,
-   * puis Contact/Deal/Quote... dans les phases suivantes). */
   public readonly db: ReturnType<PrismaClient['$extends']>;
 
   constructor(

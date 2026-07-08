@@ -18,7 +18,6 @@ import { RolesGuard } from './guards/roles.guard';
       useFactory: (config: ConfigService): JwtModuleOptions => ({
         secret: config.get<string>('JWT_SECRET'),
         signOptions: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           expiresIn: (config.get<string>('JWT_ACCESS_TTL') ?? '15m') as any,
         },
       }),
