@@ -16,7 +16,11 @@ export interface AuthUser {
   role: "ADMIN" | "COLLABORATOR";
 }
 
-interface AuthResponse {
+type LoginResponse =
+  | { isPlatformAdmin: true; accessToken: string }
+  | { isPlatformAdmin: false; accessToken: string; user: AuthUser };
+
+interface RefreshResponse {
   accessToken: string;
   user: AuthUser;
 }
@@ -25,9 +29,14 @@ interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResponse>;
   signup: (tenantName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+}
+
+interface SignupResponse {
+  user: AuthUser;
+  tenant: { id: string; name: string; status: string };
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -38,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch<AuthResponse>("/auth/refresh", { method: "POST" })
+    apiFetch<RefreshResponse>("/auth/refresh", { method: "POST" })
       .then((data) => {
         setAccessToken(data.accessToken);
         setUser(data.user);
@@ -51,22 +60,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const data = await apiFetch<AuthResponse>("/auth/login", {
+    const data = await apiFetch<LoginResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    setAccessToken(data.accessToken);
-    setUser(data.user);
+    if (!data.isPlatformAdmin) {
+      setAccessToken(data.accessToken);
+      setUser(data.user);
+    }
+    return data;
   }, []);
 
   const signup = useCallback(
     async (tenantName: string, email: string, password: string) => {
-      const data = await apiFetch<AuthResponse>("/auth/signup", {
+      await apiFetch<SignupResponse>("/auth/signup", {
         method: "POST",
         body: JSON.stringify({ tenantName, email, password }),
       });
-      setAccessToken(data.accessToken);
-      setUser(data.user);
     },
     [],
   );

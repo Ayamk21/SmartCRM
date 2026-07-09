@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { AuthSplitLayout } from "@/components/layout/auth-split-layout";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { setAdminToken } from "@/lib/admin-auth";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -22,8 +23,13 @@ export default function LoginPage() {
     event.preventDefault();
     setIsSubmitting(true);
     try {
-      await login(email, password);
-      router.push("/dashboard");
+      const result = await login(email, password);
+      if (result.isPlatformAdmin) {
+        setAdminToken(result.accessToken);
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : "Impossible de se connecter.";

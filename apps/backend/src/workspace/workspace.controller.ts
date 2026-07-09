@@ -11,7 +11,7 @@ export class WorkspaceController {
 
   @Get()
   getWorkspace(@CurrentUser() user: AuthenticatedUser) {
-    return this.workspaceService.getWorkspace(user.tenantId);
+    return this.workspaceService.getWorkspace(user.tenantId!);
   }
 
   @Roles('ADMIN')
@@ -20,6 +20,6 @@ export class WorkspaceController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: UpdateWorkspaceDto,
   ) {
-    return this.workspaceService.updateWorkspace(user.tenantId, dto);
+    return this.workspaceService.updateWorkspace(user.tenantId!, dto);
   }
 }

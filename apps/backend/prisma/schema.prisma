@@ -18,20 +18,36 @@ enum PlanType {
   PRO
 }
 
+enum TenantStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
 model Tenant {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   name        String
   logoUrl     String?
-  currency    String   @default("EUR")
+  currency    String       @default("EUR")
   siret       String?
   pdfTemplate String?
-  plan        PlanType @default(FREE)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  plan        PlanType     @default(FREE)
+  status      TenantStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   users User[]
 
   @@map("tenants")
+}
+
+model PlatformAdmin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  @@map("platform_admins")
 }
 
 model User {

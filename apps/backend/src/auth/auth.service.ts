@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -46,7 +47,7 @@ export class AuthService {
 
     const { tenant, user } = await this.prisma.raw.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
-        data: { name: dto.tenantName, plan: 'FREE' },
+        data: { name: dto.tenantName, plan: 'FREE', status: 'PENDING' },
       });
       const user = await tx.user.create({
         data: {
@@ -59,17 +60,31 @@ export class AuthService {
       return { tenant, user };
     });
 
-    const tokens = await this.issueSession(user.id, user.tenantId, user.role);
     return {
-      ...tokens,
       user: { id: user.id, email: user.email, role: user.role },
-      tenant: { id: tenant.id, name: tenant.name, plan: tenant.plan },
+      tenant: { id: tenant.id, name: tenant.name, status: tenant.status },
     };
   }
 
   async login(dto: LoginDto) {
+    const admin = await this.prisma.raw.platformAdmin.findUnique({
+      where: { email: dto.email },
+    });
+    if (admin) {
+      const adminPasswordValid = await bcrypt.compare(dto.password, admin.password);
+      if (!adminPasswordValid) {
+        throw new UnauthorizedException('Identifiants invalides.');
+      }
+      const accessToken = await this.jwtService.signAsync(
+        { sub: admin.id, isPlatformAdmin: true },
+        { expiresIn: '2h' },
+      );
+      return { accessToken, isPlatformAdmin: true as const };
+    }
+
     const user = await this.prisma.raw.user.findUnique({
       where: { email: dto.email },
+      include: { tenant: true },
     });
     const passwordValid = user
       ? await bcrypt.compare(dto.password, user.password)
@@ -79,10 +94,20 @@ export class AuthService {
       throw new UnauthorizedException('Identifiants invalides.');
     }
 
+    if (user.tenant.status === 'PENDING') {
+      throw new ForbiddenException(
+        'Votre compte est en attente de validation par un administrateur.',
+      );
+    }
+    if (user.tenant.status === 'REJECTED') {
+      throw new ForbiddenException("Votre demande d'inscription a ete refusee.");
+    }
+
     const tokens = await this.issueSession(user.id, user.tenantId, user.role);
     return {
       ...tokens,
       user: { id: user.id, email: user.email, role: user.role },
+      isPlatformAdmin: false as const,
     };
   }
 

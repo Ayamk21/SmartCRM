@@ -8,6 +8,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { TenantContextInterceptor } from './tenant/tenant-context.interceptor';
 import { AuthModule } from './auth/auth.module';
 import { WorkspaceModule } from './workspace/workspace.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
     PrismaModule,
     AuthModule,
     WorkspaceModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

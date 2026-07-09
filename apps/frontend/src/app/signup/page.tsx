@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,18 +13,18 @@ import { useAuth } from "@/lib/auth-context";
 
 export default function SignupPage() {
   const { signup } = useAuth();
-  const router = useRouter();
   const [tenantName, setTenantName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDone, setIsDone] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setIsSubmitting(true);
     try {
       await signup(tenantName, email, password);
-      router.push("/dashboard");
+      setIsDone(true);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : "Impossible de créer le compte.";
@@ -32,6 +32,30 @@ export default function SignupPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (isDone) {
+    return (
+      <AuthSplitLayout>
+        <div className="w-full max-w-sm text-center">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-success">
+            <Check className="h-6 w-6" />
+          </span>
+          <h1 className="mt-4 text-xl font-bold tracking-tight">Demande envoyée</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Votre compte a bien été créé pour <span className="font-medium">{tenantName}</span>.
+            Un administrateur doit maintenant valider votre inscription avant que vous puissiez
+            vous connecter — vous recevrez l&apos;accès dès l&apos;approbation.
+          </p>
+          <Link
+            href="/login"
+            className="mt-6 inline-block font-medium text-primary underline underline-offset-4"
+          >
+            Retour à la connexion
+          </Link>
+        </div>
+      </AuthSplitLayout>
+    );
   }
 
   return (

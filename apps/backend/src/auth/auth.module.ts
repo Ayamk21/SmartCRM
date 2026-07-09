@@ -9,20 +9,19 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
+const jwtModule = JwtModule.registerAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService): JwtModuleOptions => ({
+    secret: config.get<string>('JWT_SECRET'),
+    signOptions: {
+      expiresIn: (config.get<string>('JWT_ACCESS_TTL') ?? '15m') as any,
+    },
+  }),
+});
+
 @Module({
-  imports: [
-    PassportModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService): JwtModuleOptions => ({
-        secret: config.get<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: (config.get<string>('JWT_ACCESS_TTL') ?? '15m') as any,
-        },
-      }),
-    }),
-  ],
+  imports: [PassportModule, jwtModule],
   controllers: [AuthController],
   providers: [
     AuthService,
@@ -30,5 +29,6 @@ import { RolesGuard } from './guards/roles.guard';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
+  exports: [jwtModule],
 })
 export class AuthModule {}

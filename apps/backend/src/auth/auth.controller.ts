@@ -29,20 +29,20 @@ export class AuthController {
 
   @Public()
   @Post('signup')
-  async signup(@Body() dto: SignupDto, @Res({ passthrough: true }) res: Response) {
-    const { accessToken, refreshToken, user, tenant } =
-      await this.authService.signup(dto);
-    this.setRefreshCookie(res, refreshToken);
-    return { accessToken, user, tenant };
+  async signup(@Body() dto: SignupDto) {
+    return this.authService.signup(dto);
   }
 
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('login')
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const { accessToken, refreshToken, user } = await this.authService.login(dto);
-    this.setRefreshCookie(res, refreshToken);
-    return { accessToken, user };
+    const result = await this.authService.login(dto);
+    if (result.isPlatformAdmin) {
+      return { accessToken: result.accessToken, isPlatformAdmin: true };
+    }
+    this.setRefreshCookie(res, result.refreshToken);
+    return { accessToken: result.accessToken, user: result.user, isPlatformAdmin: false };
   }
 
   @Public()

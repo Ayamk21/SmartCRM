@@ -2,8 +2,9 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 export interface AuthenticatedUser {
   sub: string;
-  tenantId: string;
-  role: string;
+  tenantId?: string;
+  role?: string;
+  isPlatformAdmin?: boolean;
 }
 
 export const CurrentUser = createParamDecorator(
