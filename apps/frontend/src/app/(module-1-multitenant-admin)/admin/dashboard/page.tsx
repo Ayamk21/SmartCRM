@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch, ApiError } from "@/lib/api";
-import { clearAdminToken, getAdminToken } from "@/lib/admin-auth";
+import { clearAdminToken, getAdminToken } from "@/modules/module-1-multitenant-admin/lib/admin-auth";
 
 interface AdminTenant {
   id: string;

@@ -13,7 +13,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth, type AuthUser } from "@/lib/auth-context";
+import { useAuth, type AuthUser } from "@/modules/module-1-multitenant-admin/lib/auth-context";
 import {
   DropdownMenu,
   DropdownMenuContent,

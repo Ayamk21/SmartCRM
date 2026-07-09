@@ -7,10 +7,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AuthSplitLayout } from "@/components/layout/auth-split-layout";
+import { AuthSplitLayout } from "@/modules/module-1-multitenant-admin/components/auth-split-layout";
 import { ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
-import { setAdminToken } from "@/lib/admin-auth";
+import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
+import { setAdminToken } from "@/modules/module-1-multitenant-admin/lib/admin-auth";
 
 export default function LoginPage() {
   const { login } = useAuth();

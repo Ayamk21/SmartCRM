@@ -1,7 +1,7 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../../generated/prisma/client';
+import { PrismaClient } from '../../../generated/prisma/client';
 import { TenantContextService } from '../tenant/tenant-context.service';
 import { tenantScopingExtension } from './tenant-scoping.extension';
 

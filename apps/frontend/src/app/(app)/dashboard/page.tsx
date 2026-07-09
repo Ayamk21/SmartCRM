@@ -5,7 +5,7 @@ import { ArrowUpRight, ArrowDownRight, TrendingUp, Percent, Users2 } from "lucid
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { PageHeader } from "@/components/layout/page-header";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
 import { MOCK_ACTIVITIES, MOCK_CONTACTS, MOCK_DEALS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 

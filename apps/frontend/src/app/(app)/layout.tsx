@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();

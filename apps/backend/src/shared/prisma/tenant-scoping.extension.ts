@@ -1,4 +1,4 @@
-import { Prisma } from '../../generated/prisma/client';
+import { Prisma } from '../../../generated/prisma/client';
 import { TenantContextService } from '../tenant/tenant-context.service';
 
 const TENANT_SCOPED_MODELS = new Set(['User']);

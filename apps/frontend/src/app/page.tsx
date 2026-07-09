@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
 
 export default function Home() {
   const { user, isLoading } = useAuth();
