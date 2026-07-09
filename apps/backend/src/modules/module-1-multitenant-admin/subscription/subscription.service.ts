@@ -86,6 +86,21 @@ export class SubscriptionService {
         });
         break;
       }
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription;
+        const isCancelled =
+          subscription.cancel_at_period_end ||
+          Boolean(subscription.cancel_at) ||
+          Boolean(subscription.canceled_at) ||
+          subscription.status === 'canceled';
+        if (isCancelled) {
+          await this.prisma.raw.tenant.updateMany({
+            where: { stripeSubscriptionId: subscription.id },
+            data: { plan: 'FREE' },
+          });
+        }
+        break;
+      }
     }
   }
 }
