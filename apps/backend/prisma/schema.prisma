@@ -24,6 +24,26 @@ enum TenantStatus {
   REJECTED
 }
 
+enum ContactType {
+  LEAD
+  CLIENT
+}
+
+enum DealStatus {
+  PROSPECT
+  QUALIFICATION
+  PROPOSITION
+  GAGNE
+  PERDU
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  NOTE
+  STATUS_CHANGE
+}
+
 model Tenant {
   id                   String       @id @default(cuid())
   name                 String
@@ -38,7 +58,10 @@ model Tenant {
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
-  users User[]
+  users      User[]
+  contacts   Contact[]
+  deals      Deal[]
+  activities Activity[]
 
   @@map("tenants")
 }
@@ -65,7 +88,8 @@ model User {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  sessions Session[]
+  sessions   Session[]
+  activities Activity[]
 
   @@index([tenantId])
   @@map("users")
@@ -83,4 +107,66 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+model Contact {
+  id        String      @id @default(cuid())
+  type      ContactType @default(LEAD)
+  firstName String
+  lastName  String?
+  company   String?
+  title     String?
+  email     String?
+  phone     String?
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  deals      Deal[]
+  activities Activity[]
+
+  @@index([tenantId])
+  @@map("contacts")
+}
+
+model Deal {
+  id        String     @id @default(cuid())
+  title     String
+  amount    Decimal    @db.Decimal(10, 2)
+  status    DealStatus @default(PROSPECT)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([contactId])
+  @@map("deals")
+}
+
+model Activity {
+  id        String       @id @default(cuid())
+  type      ActivityType @default(NOTE)
+  content   String
+  createdAt DateTime     @default(now())
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  createdByUserId String?
+  createdByUser   User?   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([contactId])
+  @@map("activities")
 }

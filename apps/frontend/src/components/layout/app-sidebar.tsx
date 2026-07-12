@@ -33,7 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Contacts", href: "/contacts", icon: Users },
   { label: "Pipeline", href: "/pipeline", icon: KanbanSquare },
   { label: "Devis & Factures", icon: FileText },
-  { label: "Copilot IA", icon: Sparkles },
+  { label: "Copilot IA", href: "/copilot", icon: Sparkles },
   { label: "Paramètres", href: "/workspace", icon: Settings, adminOnly: true },
 ];
 

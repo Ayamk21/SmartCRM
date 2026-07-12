@@ -10,6 +10,10 @@ import { AuthModule } from './modules/module-1-multitenant-admin/auth/auth.modul
 import { WorkspaceModule } from './modules/module-1-multitenant-admin/workspace/workspace.module';
 import { AdminModule } from './modules/module-1-multitenant-admin/admin/admin.module';
 import { SubscriptionModule } from './modules/module-1-multitenant-admin/subscription/subscription.module';
+import { ContactsModule } from './modules/module-2-crm-pipeline/contacts/contacts.module';
+import { DealsModule } from './modules/module-2-crm-pipeline/deals/deals.module';
+import { ActivitiesModule } from './modules/module-2-crm-pipeline/activities/activities.module';
+import { QuoteGeneratorModule } from './modules/module-3-copilot-ia/quote-generator/quote-generator.module';
 
 @Module({
   imports: [
@@ -22,6 +26,10 @@ import { SubscriptionModule } from './modules/module-1-multitenant-admin/subscri
     WorkspaceModule,
     AdminModule,
     SubscriptionModule,
+    ContactsModule,
+    DealsModule,
+    ActivitiesModule,
+    QuoteGeneratorModule,
   ],
   controllers: [AppController],
   providers: [

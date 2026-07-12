@@ -1,7 +1,7 @@
 import { Prisma } from '../../../generated/prisma/client';
 import { TenantContextService } from '../tenant/tenant-context.service';
 
-const TENANT_SCOPED_MODELS = new Set(['User']);
+const TENANT_SCOPED_MODELS = new Set(['User', 'Contact', 'Deal', 'Activity']);
 
 const READ_OR_DELETE_OPS = new Set([
   'findMany',

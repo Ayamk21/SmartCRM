@@ -8,7 +8,7 @@ import { tenantScopingExtension } from './tenant-scoping.extension';
 @Injectable()
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
   public readonly raw: PrismaClient;
-  public readonly db: ReturnType<PrismaClient['$extends']>;
+  public readonly db: ReturnType<PrismaService['buildDb']>;
 
   constructor(
     configService: ConfigService,
@@ -18,7 +18,11 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
       connectionString: configService.get<string>('DATABASE_URL'),
     });
     this.raw = new PrismaClient({ adapter });
-    this.db = this.raw.$extends(tenantScopingExtension(tenantContext));
+    this.db = this.buildDb(tenantContext);
+  }
+
+  private buildDb(tenantContext: TenantContextService) {
+    return this.raw.$extends(tenantScopingExtension(tenantContext));
   }
 
   async onModuleInit() {
