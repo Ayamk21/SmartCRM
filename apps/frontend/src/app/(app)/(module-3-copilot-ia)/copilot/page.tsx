@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { Lock, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
@@ -18,7 +21,7 @@ interface QuoteLine {
   unitPrice: number;
 }
 
-export default function CopilotPage() {
+function QuoteGeneratorTool() {
   const { accessToken } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [lines, setLines] = useState<QuoteLine[]>([]);
@@ -58,12 +61,7 @@ export default function CopilotPage() {
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-5">
-      <PageHeader
-        title="Copilot IA"
-        description="Génération de devis par prompt : décris ta prestation, l'IA structure les lignes."
-      />
-
+    <div className="flex flex-col gap-5">
       <Card className="border-border/60 shadow-sm">
         <CardContent className="py-4">
           <form onSubmit={handleGenerate} className="flex flex-col gap-3">
@@ -142,6 +140,136 @@ export default function CopilotPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+}
+
+function ConversationSummaryTool() {
+  const { accessToken } = useAuth();
+  const [text, setText] = useState("");
+  const [paragraphs, setParagraphs] = useState<string[]>([]);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+
+  async function handleSummarize(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken || text.trim().length < 20) {
+      toast.info("Colle au moins quelques phrases d'échange à résumer.");
+      return;
+    }
+    setIsSummarizing(true);
+    try {
+      const result = await apiFetch<{ paragraphs: string[] }>("/copilot/conversation-summary", {
+        method: "POST",
+        accessToken,
+        body: JSON.stringify({ text }),
+      });
+      setParagraphs(result.paragraphs);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Échec du résumé.");
+    } finally {
+      setIsSummarizing(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card className="border-border/60 shadow-sm">
+        <CardContent className="py-4">
+          <form onSubmit={handleSummarize} className="flex flex-col gap-3">
+            <Label htmlFor="conversation">Colle des emails ou un compte-rendu de réunion</Label>
+            <Textarea
+              id="conversation"
+              placeholder="Colle ici le flux d'échanges (emails, notes de réunion...) à résumer"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="min-h-40"
+              required
+            />
+            <Button
+              type="submit"
+              disabled={isSummarizing}
+              className="self-end bg-ai text-ai-foreground hover:bg-ai/90"
+            >
+              <Sparkles className="h-4 w-4" />
+              {isSummarizing ? "Résumé..." : "Résumer en 3 paragraphes"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {paragraphs.length > 0 && (
+        <Card className="border-border/60 shadow-sm">
+          <CardContent className="flex flex-col gap-3 py-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Résumé
+            </h2>
+            {paragraphs.map((paragraph, i) => (
+              <p key={i} className="text-sm leading-relaxed">
+                {paragraph}
+              </p>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+export default function CopilotPage() {
+  const { accessToken } = useAuth();
+  const [plan, setPlan] = useState<"FREE" | "PRO" | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    apiFetch<{ plan: "FREE" | "PRO" }>("/workspace", { accessToken })
+      .then((data) => setPlan(data.plan))
+      .catch(() => toast.error("Impossible de vérifier ton abonnement."))
+      .finally(() => setIsLoading(false));
+  }, [accessToken]);
+
+  return (
+    <div className="flex max-w-3xl flex-col gap-5">
+      <PageHeader
+        title="Copilot IA"
+        description="Tes outils d'assistant intelligent pour gagner du temps au quotidien."
+      />
+
+      {isLoading ? (
+        <Skeleton className="h-48 w-full rounded-xl" />
+      ) : plan !== "PRO" ? (
+        <Card className="border-border/60 shadow-sm">
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-ai/15 text-ai">
+              <Lock className="h-6 w-6" />
+            </span>
+            <h2 className="text-base font-semibold">Fonctionnalité réservée au plan Pro</h2>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Le Copilot IA (génération de devis, relances, résumés) est disponible uniquement
+              pour les workspaces Pro. Passe en Pro pour y accéder.
+            </p>
+            <Button
+              render={<Link href="/workspace" />}
+              className="mt-2 bg-ai text-ai-foreground hover:bg-ai/90"
+            >
+              Passer en Pro
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs defaultValue="devis">
+          <TabsList>
+            <TabsTrigger value="devis">Génération de devis</TabsTrigger>
+            <TabsTrigger value="resume">Résumé de conversation</TabsTrigger>
+          </TabsList>
+          <TabsContent value="devis" className="mt-4">
+            <QuoteGeneratorTool />
+          </TabsContent>
+          <TabsContent value="resume" className="mt-4">
+            <ConversationSummaryTool />
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

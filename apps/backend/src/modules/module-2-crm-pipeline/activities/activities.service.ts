@@ -22,4 +22,12 @@ export class ActivitiesService {
       } as Prisma.ActivityUncheckedCreateInput,
     });
   }
+
+  findRecent(limit = 5) {
+    return this.prisma.db.activity.findMany({
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: { contact: true },
+    });
+  }
 }

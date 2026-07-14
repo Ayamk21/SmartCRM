@@ -1,25 +1,40 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, ArrowDownRight, TrendingUp, Percent, Users2 } from "lucide-react";
+import { TrendingUp, Percent, Users2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/page-header";
 import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
-import { MOCK_ACTIVITIES, MOCK_CONTACTS, MOCK_DEALS } from "@/lib/mock-data";
-import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
+
+type DealStatus = "PROSPECT" | "QUALIFICATION" | "PROPOSITION" | "GAGNE" | "PERDU";
+
+interface Deal {
+  id: string;
+  status: DealStatus;
+  amount: string;
+}
+
+interface RecentActivity {
+  id: string;
+  content: string;
+  createdAt: string;
+  contact: {
+    firstName: string;
+    lastName: string | null;
+  };
+}
 
 function StatTile({
   label,
   value,
-  delta,
-  deltaTone,
   icon: Icon,
 }: {
   label: string;
   value: string;
-  delta?: string;
-  deltaTone?: "up" | "down";
   icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
@@ -33,22 +48,6 @@ function StatTile({
             {label}
           </div>
           <div className="mt-0.5 text-2xl font-bold tabular-nums">{value}</div>
-          {delta && (
-            <div
-              className={cn(
-                "mt-1 flex items-center gap-1 text-xs font-medium",
-                deltaTone === "up" && "text-success",
-                deltaTone === "down" && "text-destructive",
-              )}
-            >
-              {deltaTone === "up" ? (
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              ) : (
-                <ArrowDownRight className="h-3.5 w-3.5" />
-              )}
-              {delta}
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>
@@ -56,15 +55,30 @@ function StatTile({
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [activities, setActivities] = useState<RecentActivity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const won = MOCK_DEALS.filter((d) => d.status === "GAGNE");
-  const totalWon = won.reduce((sum, d) => sum + d.amount, 0);
-  const lost = MOCK_DEALS.filter((d) => d.status === "PERDU").length;
-  const conversionRate = Math.round((won.length / (won.length + lost)) * 100);
-  const newProspects = MOCK_DEALS.filter((d) => d.status === "PROSPECT").length;
+  useEffect(() => {
+    if (!accessToken) return;
+    Promise.all([
+      apiFetch<Deal[]>("/deals", { accessToken }),
+      apiFetch<RecentActivity[]>("/activities/recent?limit=5", { accessToken }),
+    ])
+      .then(([dealsData, activitiesData]) => {
+        setDeals(dealsData);
+        setActivities(activitiesData);
+      })
+      .finally(() => setIsLoading(false));
+  }, [accessToken]);
 
-  const contactsByid = Object.fromEntries(MOCK_CONTACTS.map((c) => [c.id, c]));
+  const won = deals.filter((d) => d.status === "GAGNE");
+  const lost = deals.filter((d) => d.status === "PERDU").length;
+  const totalWon = won.reduce((sum, d) => sum + Number(d.amount), 0);
+  const conversionRate =
+    won.length + lost > 0 ? Math.round((won.length / (won.length + lost)) * 100) : 0;
+  const newProspects = deals.filter((d) => d.status === "PROSPECT").length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -77,56 +91,49 @@ export default function DashboardPage() {
         <StatTile
           label="CA (deals gagnés)"
           value={`${totalWon.toLocaleString("fr-FR")} €`}
-          delta="+12% vs mois dernier"
-          deltaTone="up"
           icon={TrendingUp}
         />
-        <StatTile
-          label="Taux de conversion"
-          value={`${conversionRate}%`}
-          delta="-3 pts"
-          deltaTone="down"
-          icon={Percent}
-        />
-        <StatTile
-          label="Nouveaux prospects"
-          value={String(newProspects)}
-          delta="+4"
-          deltaTone="up"
-          icon={Users2}
-        />
+        <StatTile label="Taux de conversion" value={`${conversionRate}%`} icon={Percent} />
+        <StatTile label="Nouveaux prospects" value={String(newProspects)} icon={Users2} />
       </div>
 
       <Card className="border-border/60 shadow-sm">
         <CardContent className="py-5">
           <h2 className="mb-4 text-sm font-semibold">Activité récente</h2>
-          <div className="flex flex-col">
-            {MOCK_ACTIVITIES.map((activity) => {
-              const contact = contactsByid[activity.contactId];
-              return (
+          {isLoading ? (
+            <div className="flex flex-col gap-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : activities.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Aucune activité pour l&apos;instant.</p>
+          ) : (
+            <div className="flex flex-col">
+              {activities.map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-center gap-3 border-b border-border/60 py-3 text-sm last:border-b-0"
                 >
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-primary/10 text-xs text-primary">
-                      {contact?.firstName[0]}
-                      {contact?.lastName[0]}
+                      {activity.contact.firstName[0]}
+                      {activity.contact.lastName?.[0] ?? ""}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
                     <span className="font-medium">
-                      {contact?.firstName} {contact?.lastName}
+                      {activity.contact.firstName} {activity.contact.lastName}
                     </span>{" "}
-                    <span className="text-muted-foreground">{activity.label}</span>
+                    <span className="text-muted-foreground">{activity.content}</span>
                   </div>
                   <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
-                    {activity.date}
+                    {new Date(activity.createdAt).toLocaleDateString("fr-FR")}
                   </span>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

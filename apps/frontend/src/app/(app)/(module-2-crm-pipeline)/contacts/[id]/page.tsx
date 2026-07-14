@@ -126,6 +126,12 @@ export default function ContactDetailPage() {
   });
   const [isAddingActivity, setIsAddingActivity] = useState(false);
 
+  const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
+  const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+  const [followUpEmail, setFollowUpEmail] = useState<{ subject: string; body: string } | null>(
+    null,
+  );
+
   useEffect(() => {
     if (!accessToken) return;
     apiFetch<ContactDetail>(`/contacts/${id}`, { accessToken })
@@ -195,6 +201,33 @@ export default function ContactDetailPage() {
     }
   }
 
+  async function handleGenerateFollowUp() {
+    if (!accessToken || !contact) return;
+    setFollowUpEmail(null);
+    setIsFollowUpOpen(true);
+    setIsGeneratingFollowUp(true);
+    try {
+      const email = await apiFetch<{ subject: string; body: string }>(
+        `/copilot/follow-up/${contact.id}`,
+        { method: "POST", accessToken },
+      );
+      setFollowUpEmail(email);
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError ? error.message : "Échec de la génération de la relance.",
+      );
+      setIsFollowUpOpen(false);
+    } finally {
+      setIsGeneratingFollowUp(false);
+    }
+  }
+
+  async function copyFollowUpEmail() {
+    if (!followUpEmail) return;
+    await navigator.clipboard.writeText(`Objet : ${followUpEmail.subject}\n\n${followUpEmail.body}`);
+    toast.success("Email copié dans le presse-papiers.");
+  }
+
   async function handleDelete() {
     if (!accessToken || !contact) return;
     setIsDeleting(true);
@@ -251,7 +284,11 @@ export default function ContactDetailPage() {
             </p>
           </div>
           <div className="ml-auto flex shrink-0 gap-2">
-            <Button size="sm" className="bg-ai text-ai-foreground hover:bg-ai/90">
+            <Button
+              size="sm"
+              className="bg-ai text-ai-foreground hover:bg-ai/90"
+              onClick={handleGenerateFollowUp}
+            >
               <Sparkles className="h-3.5 w-3.5" />
               Relance IA
             </Button>
@@ -429,6 +466,59 @@ export default function ContactDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isFollowUpOpen} onOpenChange={setIsFollowUpOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Email de relance généré</DialogTitle>
+            <DialogDescription>
+              Basé sur la date et le contenu du dernier échange avec ce contact.
+            </DialogDescription>
+          </DialogHeader>
+          {isGeneratingFollowUp ? (
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-8 w-full rounded-lg" />
+              <Skeleton className="h-32 w-full rounded-lg" />
+            </div>
+          ) : (
+            followUpEmail && (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="followUpSubject">Objet</Label>
+                  <input
+                    id="followUpSubject"
+                    value={followUpEmail.subject}
+                    onChange={(e) =>
+                      setFollowUpEmail((f) => (f ? { ...f, subject: e.target.value } : f))
+                    }
+                    className="flex h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="followUpBody">Message</Label>
+                  <Textarea
+                    id="followUpBody"
+                    value={followUpEmail.body}
+                    onChange={(e) =>
+                      setFollowUpEmail((f) => (f ? { ...f, body: e.target.value } : f))
+                    }
+                    className="min-h-48"
+                  />
+                </div>
+              </div>
+            )
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={copyFollowUpEmail}
+              disabled={isGeneratingFollowUp || !followUpEmail}
+            >
+              Copier l&apos;email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

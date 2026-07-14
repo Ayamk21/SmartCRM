@@ -37,3 +37,17 @@ export async function apiFetch<T>(
 
   return body as T;
 }
+
+export async function apiFetchBlob(
+  path: string,
+  { accessToken }: { accessToken?: string | null } = {},
+): Promise<Blob> {
+  const res = await fetch(`${API_URL}${path}`, {
+    credentials: "include",
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  });
+  if (!res.ok) {
+    throw new ApiError("Impossible de générer le document.", res.status);
+  }
+  return res.blob();
+}

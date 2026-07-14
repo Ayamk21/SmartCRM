@@ -14,6 +14,11 @@ import { ContactsModule } from './modules/module-2-crm-pipeline/contacts/contact
 import { DealsModule } from './modules/module-2-crm-pipeline/deals/deals.module';
 import { ActivitiesModule } from './modules/module-2-crm-pipeline/activities/activities.module';
 import { QuoteGeneratorModule } from './modules/module-3-copilot-ia/quote-generator/quote-generator.module';
+import { FollowUpGeneratorModule } from './modules/module-3-copilot-ia/follow-up-generator/follow-up-generator.module';
+import { ConversationSummaryModule } from './modules/module-3-copilot-ia/conversation-summary/conversation-summary.module';
+import { QuotesModule } from './modules/module-4-facturation-bi/quotes/quotes.module';
+import { InvoicesModule } from './modules/module-4-facturation-bi/invoices/invoices.module';
+import { ReportingModule } from './modules/module-4-facturation-bi/reporting/reporting.module';
 
 @Module({
   imports: [
@@ -30,6 +35,11 @@ import { QuoteGeneratorModule } from './modules/module-3-copilot-ia/quote-genera
     DealsModule,
     ActivitiesModule,
     QuoteGeneratorModule,
+    FollowUpGeneratorModule,
+    ConversationSummaryModule,
+    QuotesModule,
+    InvoicesModule,
+    ReportingModule,
   ],
   controllers: [AppController],
   providers: [
