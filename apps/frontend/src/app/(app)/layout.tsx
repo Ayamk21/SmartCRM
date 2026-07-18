@@ -12,10 +12,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace("/login");
+    } else if (!isLoading && user?.mustChangePassword) {
+      router.replace("/change-password");
     }
   }, [isLoading, user, router]);
 
-  if (isLoading || !user) {
+  if (isLoading || !user || user.mustChangePassword) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Chargement...

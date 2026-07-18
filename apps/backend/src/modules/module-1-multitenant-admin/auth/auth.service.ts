@@ -11,6 +11,14 @@ import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
+import {
+  SetSecurityQuestionsDto,
+  VerifySecurityAnswersDto,
+} from './dto/security-question.dto';
+import { generateTempPassword } from './password-policy';
 
 interface IssuedTokens {
   accessToken: string;
@@ -18,7 +26,15 @@ interface IssuedTokens {
 }
 
 interface IssuedTokensWithUser extends IssuedTokens {
-  user: { id: string; email: string; role: string };
+  user: { id: string; email: string; role: string; mustChangePassword: boolean };
+}
+
+const MAX_LOGIN_ATTEMPTS = 3;
+const LOCKOUT_DURATION_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_TOKEN_PURPOSE = 'password-reset';
+
+function normalizeAnswer(answer: string): string {
+  return answer.trim().toLowerCase();
 }
 
 @Injectable()
@@ -43,16 +59,21 @@ export class AuthService {
       throw new ConflictException('Cet email est deja utilise.');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const placeholderPasswordHash = await bcrypt.hash(generateTempPassword(24), 10);
 
     const { tenant, user } = await this.prisma.raw.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
-        data: { name: dto.tenantName, plan: 'FREE', status: 'PENDING' },
+        data: {
+          name: dto.tenantName,
+          category: dto.category,
+          plan: 'FREE',
+          status: 'PENDING',
+        },
       });
       const user = await tx.user.create({
         data: {
           email: dto.email,
-          password: passwordHash,
+          password: placeholderPasswordHash,
           role: 'ADMIN',
           tenantId: tenant.id,
         },
@@ -86,12 +107,38 @@ export class AuthService {
       where: { email: dto.email },
       include: { tenant: true },
     });
+
+    if (user?.lockedUntil) {
+      if (user.lockedUntil > new Date()) {
+        const minutesLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000);
+        throw new ForbiddenException(
+          `Compte verrouille suite a plusieurs echecs de connexion. Reessayez dans ${minutesLeft} minute(s).`,
+        );
+      }
+      await this.prisma.raw.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
+      user.failedLoginAttempts = 0;
+      user.lockedUntil = null;
+    }
+
     const passwordValid = user
       ? await bcrypt.compare(dto.password, user.password)
       : false;
 
     if (!user || !passwordValid) {
+      if (user) {
+        await this.registerFailedLoginAttempt(user.id, user.failedLoginAttempts);
+      }
       throw new UnauthorizedException('Identifiants invalides.');
+    }
+
+    if (user.failedLoginAttempts > 0) {
+      await this.prisma.raw.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0 },
+      });
     }
 
     if (user.tenant.status === 'PENDING') {
@@ -106,7 +153,12 @@ export class AuthService {
     const tokens = await this.issueSession(user.id, user.tenantId, user.role);
     return {
       ...tokens,
-      user: { id: user.id, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        mustChangePassword: user.mustChangePassword,
+      },
       isPlatformAdmin: false as const,
     };
   }
@@ -138,6 +190,7 @@ export class AuthService {
         id: session.user.id,
         email: session.user.email,
         role: session.user.role,
+        mustChangePassword: session.user.mustChangePassword,
       },
     };
   }
@@ -147,6 +200,127 @@ export class AuthService {
     await this.prisma.raw.session.updateMany({
       where: { tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
+    });
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.prisma.raw.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur introuvable.');
+    }
+    const currentValid = await bcrypt.compare(dto.currentPassword, user.password);
+    if (!currentValid) {
+      throw new UnauthorizedException('Mot de passe actuel incorrect.');
+    }
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.prisma.raw.user.update({
+      where: { id: userId },
+      data: { password: passwordHash, mustChangePassword: false },
+    });
+  }
+
+  async deleteAccount(userId: string, dto: DeleteAccountDto): Promise<void> {
+    const user = await this.prisma.raw.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('Utilisateur introuvable.');
+    }
+    const passwordValid = await bcrypt.compare(dto.password, user.password);
+    if (!passwordValid) {
+      throw new UnauthorizedException('Mot de passe incorrect.');
+    }
+
+    if (user.role === 'ADMIN') {
+      await this.prisma.raw.tenant.delete({ where: { id: user.tenantId } });
+    } else {
+      await this.prisma.raw.user.delete({ where: { id: userId } });
+    }
+  }
+
+  async setSecurityQuestions(userId: string, dto: SetSecurityQuestionsDto) {
+    const entries = await Promise.all(
+      dto.questions.map(async (q) => ({
+        userId,
+        question: q.question,
+        answerHash: await bcrypt.hash(normalizeAnswer(q.answer), 10),
+      })),
+    );
+
+    await this.prisma.raw.$transaction([
+      this.prisma.raw.securityQuestion.deleteMany({ where: { userId } }),
+      this.prisma.raw.securityQuestion.createMany({ data: entries }),
+    ]);
+
+    return { ok: true };
+  }
+
+  async getSecurityQuestions(email: string): Promise<{ questions: string[] }> {
+    const user = await this.prisma.raw.user.findUnique({
+      where: { email },
+      include: { securityQuestions: true },
+    });
+    return { questions: user?.securityQuestions.map((q) => q.question) ?? [] };
+  }
+
+  async verifySecurityAnswers(dto: VerifySecurityAnswersDto): Promise<{ resetToken: string }> {
+    const user = await this.prisma.raw.user.findUnique({
+      where: { email: dto.email },
+      include: { securityQuestions: true },
+    });
+
+    if (!user || user.securityQuestions.length === 0) {
+      throw new UnauthorizedException('Reponses incorrectes.');
+    }
+    if (dto.answers.length !== user.securityQuestions.length) {
+      throw new UnauthorizedException('Reponses incorrectes.');
+    }
+
+    for (const provided of dto.answers) {
+      const match = user.securityQuestions.find((q) => q.question === provided.question);
+      const valid = match
+        ? await bcrypt.compare(normalizeAnswer(provided.answer), match.answerHash)
+        : false;
+      if (!valid) {
+        throw new UnauthorizedException('Reponses incorrectes.');
+      }
+    }
+
+    const resetToken = await this.jwtService.signAsync(
+      { sub: user.id, purpose: PASSWORD_RESET_TOKEN_PURPOSE },
+      { expiresIn: '15m' },
+    );
+    return { resetToken };
+  }
+
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    let payload: { sub: string; purpose?: string };
+    try {
+      payload = await this.jwtService.verifyAsync(dto.resetToken);
+    } catch {
+      throw new UnauthorizedException('Lien de reinitialisation invalide ou expire.');
+    }
+    if (payload.purpose !== PASSWORD_RESET_TOKEN_PURPOSE) {
+      throw new UnauthorizedException('Lien de reinitialisation invalide.');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    await this.prisma.raw.user.update({
+      where: { id: payload.sub },
+      data: { password: passwordHash, failedLoginAttempts: 0, lockedUntil: null },
+    });
+    await this.prisma.raw.session.updateMany({
+      where: { userId: payload.sub, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  private async registerFailedLoginAttempt(userId: string, currentAttempts: number) {
+    const attempts = currentAttempts + 1;
+    await this.prisma.raw.user.update({
+      where: { id: userId },
+      data: {
+        failedLoginAttempts: attempts,
+        lockedUntil: attempts >= MAX_LOGIN_ATTEMPTS ? new Date(Date.now() + LOCKOUT_DURATION_MS) : null,
+      },
     });
   }
 

@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Req,
   Res,
@@ -17,6 +19,13 @@ import type { AuthenticatedUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
+import {
+  SetSecurityQuestionsDto,
+  VerifySecurityAnswersDto,
+} from './dto/security-question.dto';
 
 const REFRESH_COOKIE = 'refreshToken';
 
@@ -73,6 +82,56 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return user;
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('change-password')
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    await this.authService.changePassword(user.sub, dto);
+    return { ok: true };
+  }
+
+  @Delete('account')
+  async deleteAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: DeleteAccountDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.authService.deleteAccount(user.sub, dto);
+    res.clearCookie(REFRESH_COOKIE);
+    return { ok: true };
+  }
+
+  @Post('security-questions')
+  setSecurityQuestions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SetSecurityQuestionsDto,
+  ) {
+    return this.authService.setSecurityQuestions(user.sub, dto);
+  }
+
+  @Public()
+  @Get('security-questions/:email')
+  getSecurityQuestions(@Param('email') email: string) {
+    return this.authService.getSecurityQuestions(email);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('recover/verify-security-answers')
+  verifySecurityAnswers(@Body() dto: VerifySecurityAnswersDto) {
+    return this.authService.verifySecurityAnswers(dto);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('reset-password')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    await this.authService.resetPassword(dto);
+    return { ok: true };
   }
 
   private setRefreshCookie(res: Response, refreshToken: string) {

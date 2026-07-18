@@ -8,15 +8,27 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { apiFetch, ApiError } from "@/lib/api";
 import { clearAdminToken, getAdminToken } from "@/modules/module-1-multitenant-admin/lib/admin-auth";
 
 interface AdminTenant {
   id: string;
   name: string;
+  category: string | null;
   status: "PENDING" | "ACTIVE" | "REJECTED";
   plan: "FREE" | "PRO";
   createdAt: string;
+  rejectionReason: string | null;
   adminEmail: string | null;
 }
 
@@ -36,6 +48,12 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [tenants, setTenants] = useState<AdminTenant[] | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [rejectingTenant, setRejectingTenant] = useState<AdminTenant | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [approvedInfo, setApprovedInfo] = useState<{
+    email: string;
+    tempPassword: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     const token = getAdminToken();
@@ -60,17 +78,27 @@ export default function AdminDashboardPage() {
     load();
   }, [load]);
 
-  async function updateStatus(id: string, status: "ACTIVE" | "REJECTED") {
+  async function updateStatus(id: string, status: "ACTIVE" | "REJECTED", reason?: string) {
     const token = getAdminToken();
     if (!token) return;
     setUpdatingId(id);
     try {
-      await apiFetch(`/admin/tenants/${id}/status`, {
+      const result = await apiFetch<{ tempPassword?: string }>(`/admin/tenants/${id}/status`, {
         method: "PATCH",
         accessToken: token,
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, reason }),
       });
-      toast.success(status === "ACTIVE" ? "Compte approuvé." : "Compte refusé.");
+      if (status === "ACTIVE" && result.tempPassword) {
+        const tenant = tenants?.find((t) => t.id === id);
+        if (tenant?.adminEmail) {
+          setApprovedInfo({ email: tenant.adminEmail, tempPassword: result.tempPassword });
+        }
+      }
+      toast.success(
+        status === "ACTIVE"
+          ? "Compte approuvé — un email avec les identifiants a été envoyé."
+          : "Compte refusé — un email avec le motif a été envoyé.",
+      );
       await load();
     } catch {
       toast.error("Échec de la mise à jour.");
@@ -82,6 +110,13 @@ export default function AdminDashboardPage() {
   function handleLogout() {
     clearAdminToken();
     router.push("/login");
+  }
+
+  async function handleConfirmReject() {
+    if (!rejectingTenant || !rejectionReason.trim()) return;
+    await updateStatus(rejectingTenant.id, "REJECTED", rejectionReason.trim());
+    setRejectingTenant(null);
+    setRejectionReason("");
   }
 
   const pending = tenants?.filter((t) => t.status === "PENDING") ?? [];
@@ -131,7 +166,8 @@ export default function AdminDashboardPage() {
                         <div className="min-w-0">
                           <div className="text-sm font-semibold">{tenant.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {tenant.adminEmail} ·{" "}
+                            {tenant.adminEmail}
+                            {tenant.category ? ` · ${tenant.category}` : ""} ·{" "}
                             {new Date(tenant.createdAt).toLocaleDateString("fr-FR")}
                           </div>
                         </div>
@@ -150,7 +186,7 @@ export default function AdminDashboardPage() {
                             variant="outline"
                             disabled={updatingId === tenant.id}
                             className="border-destructive/40 text-destructive hover:bg-destructive/10"
-                            onClick={() => updateStatus(tenant.id, "REJECTED")}
+                            onClick={() => setRejectingTenant(tenant)}
                           >
                             <X className="h-3.5 w-3.5" />
                             Refuser
@@ -171,13 +207,20 @@ export default function AdminDashboardPage() {
                     {others.map((tenant) => (
                       <div
                         key={tenant.id}
-                        className="flex items-center gap-3 border-b border-border/60 py-2.5 text-sm last:border-b-0"
+                        className="flex flex-col gap-1 border-b border-border/60 py-2.5 text-sm last:border-b-0"
                       >
-                        <span className="font-medium">{tenant.name}</span>
-                        <span className="text-xs text-muted-foreground">{tenant.adminEmail}</span>
-                        <Badge className={`ml-auto text-[10px] ${STATUS_STYLE[tenant.status]}`}>
-                          {STATUS_LABEL[tenant.status]}
-                        </Badge>
+                        <div className="flex items-center gap-3">
+                          <span className="font-medium">{tenant.name}</span>
+                          <span className="text-xs text-muted-foreground">{tenant.adminEmail}</span>
+                          <Badge className={`ml-auto text-[10px] ${STATUS_STYLE[tenant.status]}`}>
+                            {STATUS_LABEL[tenant.status]}
+                          </Badge>
+                        </div>
+                        {tenant.status === "REJECTED" && tenant.rejectionReason && (
+                          <p className="text-xs text-muted-foreground">
+                            Motif : {tenant.rejectionReason}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </CardContent>
@@ -187,6 +230,72 @@ export default function AdminDashboardPage() {
           </>
         )}
       </div>
+
+      <Dialog
+        open={rejectingTenant !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectingTenant(null);
+            setRejectionReason("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Refuser la demande</DialogTitle>
+            <DialogDescription>
+              Indique le motif du refus — {rejectingTenant?.name} le recevra par email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="rejectionReason">Motif</Label>
+            <Textarea
+              id="rejectionReason"
+              required
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="destructive"
+              disabled={!rejectionReason.trim() || updatingId === rejectingTenant?.id}
+              onClick={handleConfirmReject}
+            >
+              Confirmer le refus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={approvedInfo !== null} onOpenChange={(open) => !open && setApprovedInfo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Compte approuvé</DialogTitle>
+            <DialogDescription>
+              Identifiants générés — utile pour tester si l&apos;email n&apos;a pas pu être livré
+              (mode test Resend, sans domaine vérifié).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 text-sm">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium uppercase text-muted-foreground">Email</span>
+              <span className="font-mono">{approvedInfo?.email}</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
+                Mot de passe temporaire
+              </span>
+              <span className="font-mono text-base font-semibold">
+                {approvedInfo?.tempPassword}
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setApprovedInfo(null)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

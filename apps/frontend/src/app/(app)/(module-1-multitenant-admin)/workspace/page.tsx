@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,9 +23,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
+import { SECURITY_QUESTIONS } from "@/modules/module-1-multitenant-admin/lib/security-questions";
 
 const PDF_TEMPLATES = [
   { value: "classique", label: "Classique" },
@@ -44,9 +54,10 @@ interface Workspace {
 }
 
 export default function WorkspacePage() {
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, logout } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,6 +70,19 @@ export default function WorkspacePage() {
     logoUrl: "",
     pdfTemplate: "classique",
   });
+
+  const [isSavingSecurity, setIsSavingSecurity] = useState(false);
+  const [securityForm, setSecurityForm] = useState({
+    question1: SECURITY_QUESTIONS[0],
+    answer1: "",
+    question2: SECURITY_QUESTIONS[1],
+    answer2: "",
+  });
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   useEffect(() => {
     if (!accessToken) return;
@@ -108,6 +132,54 @@ export default function WorkspacePage() {
       toast.error(error instanceof ApiError ? error.message : "Échec de la mise à jour.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleSecuritySubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken) return;
+    if (securityForm.question1 === securityForm.question2) {
+      toast.error("Choisis deux questions différentes.");
+      return;
+    }
+    setIsSavingSecurity(true);
+    try {
+      await apiFetch("/auth/security-questions", {
+        method: "POST",
+        accessToken,
+        body: JSON.stringify({
+          questions: [
+            { question: securityForm.question1, answer: securityForm.answer1 },
+            { question: securityForm.question2, answer: securityForm.answer2 },
+          ],
+        }),
+      });
+      toast.success("Questions de sécurité enregistrées.");
+      setSecurityForm((f) => ({ ...f, answer1: "", answer2: "" }));
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Échec de l'enregistrement.");
+    } finally {
+      setIsSavingSecurity(false);
+    }
+  }
+
+  async function handleDeleteAccount(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken || !workspace) return;
+    setIsDeleting(true);
+    try {
+      await apiFetch("/auth/account", {
+        method: "DELETE",
+        accessToken,
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      toast.success("Compte supprimé.");
+      await logout();
+      router.push("/login");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Échec de la suppression.");
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -287,6 +359,151 @@ export default function WorkspacePage() {
               </Button>
             )}
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Questions de sécurité</CardTitle>
+          <CardDescription>
+            Utilisées pour récupérer ton compte en cas de mot de passe oublié.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSecuritySubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="question1">Question 1</Label>
+              <Select
+                value={securityForm.question1}
+                onValueChange={(value) =>
+                  value && setSecurityForm((f) => ({ ...f, question1: value }))
+                }
+              >
+                <SelectTrigger id="question1" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SECURITY_QUESTIONS.map((q) => (
+                    <SelectItem key={q} value={q}>
+                      {q}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                required
+                placeholder="Ta réponse"
+                value={securityForm.answer1}
+                onChange={(e) => setSecurityForm((f) => ({ ...f, answer1: e.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="question2">Question 2</Label>
+              <Select
+                value={securityForm.question2}
+                onValueChange={(value) =>
+                  value && setSecurityForm((f) => ({ ...f, question2: value }))
+                }
+              >
+                <SelectTrigger id="question2" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SECURITY_QUESTIONS.map((q) => (
+                    <SelectItem key={q} value={q}>
+                      {q}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                required
+                placeholder="Ta réponse"
+                value={securityForm.answer2}
+                onChange={(e) => setSecurityForm((f) => ({ ...f, answer2: e.target.value }))}
+              />
+            </div>
+            <Button type="submit" disabled={isSavingSecurity} className="mt-2 self-start">
+              {isSavingSecurity ? "Enregistrement..." : "Enregistrer mes questions"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/40 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base text-destructive">Zone de danger</CardTitle>
+          <CardDescription>
+            {isAdmin
+              ? "Supprime définitivement ton compte et tout le workspace (contacts, deals, devis, factures...)."
+              : "Supprime définitivement ton compte personnel."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Dialog
+            open={isDeleteOpen}
+            onOpenChange={(open) => {
+              setIsDeleteOpen(open);
+              if (!open) {
+                setDeletePassword("");
+                setDeleteConfirmText("");
+              }
+            }}
+          >
+            <DialogTrigger render={<Button variant="destructive" />}>
+              Supprimer mon compte
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Supprimer définitivement ton compte ?</DialogTitle>
+                <DialogDescription>
+                  {isAdmin
+                    ? `Cette action supprime ${workspace.name} et toutes ses données (contacts, deals, devis, factures). C'est irréversible.`
+                    : "Cette action supprime ton compte personnel. C'est irréversible."}
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleDeleteAccount} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="deletePassword">Ton mot de passe</Label>
+                  <Input
+                    id="deletePassword"
+                    type="password"
+                    required
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="deleteConfirmText">
+                    Tape{" "}
+                    <span className="font-mono font-semibold">
+                      {isAdmin ? workspace.name : user?.email}
+                    </span>{" "}
+                    pour confirmer
+                  </Label>
+                  <Input
+                    id="deleteConfirmText"
+                    required
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button
+                    type="submit"
+                    variant="destructive"
+                    disabled={
+                      isDeleting ||
+                      deleteConfirmText !== (isAdmin ? workspace.name : user?.email) ||
+                      !deletePassword
+                    }
+                  >
+                    {isDeleting ? "Suppression..." : "Supprimer définitivement"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
     </div>

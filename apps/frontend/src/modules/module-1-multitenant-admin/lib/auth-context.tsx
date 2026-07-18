@@ -14,6 +14,7 @@ export interface AuthUser {
   id: string;
   email: string;
   role: "ADMIN" | "COLLABORATOR";
+  mustChangePassword: boolean;
 }
 
 type LoginResponse =
@@ -30,8 +31,9 @@ interface AuthContextValue {
   accessToken: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<LoginResponse>;
-  signup: (tenantName: string, email: string, password: string) => Promise<void>;
+  signup: (tenantName: string, category: string, email: string) => Promise<void>;
   logout: () => Promise<void>;
+  markPasswordChanged: () => void;
 }
 
 interface SignupResponse {
@@ -72,10 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signup = useCallback(
-    async (tenantName: string, email: string, password: string) => {
+    async (tenantName: string, category: string, email: string) => {
       await apiFetch<SignupResponse>("/auth/signup", {
         method: "POST",
-        body: JSON.stringify({ tenantName, email, password }),
+        body: JSON.stringify({ tenantName, category, email }),
       });
     },
     [],
@@ -87,9 +89,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const markPasswordChanged = useCallback(() => {
+    setUser((prev) => (prev ? { ...prev, mustChangePassword: false } : prev));
+  }, []);
+
   return (
     <AuthContext.Provider
-      value={{ user, accessToken, isLoading, login, signup, logout }}
+      value={{ user, accessToken, isLoading, login, signup, logout, markPasswordChanged }}
     >
       {children}
     </AuthContext.Provider>

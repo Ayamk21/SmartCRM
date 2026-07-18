@@ -5,10 +5,10 @@ export class SignupDto {
   @MinLength(2)
   tenantName: string;
 
+  @IsString()
+  @MinLength(2)
+  category: string;
+
   @IsEmail()
   email: string;
-
-  @IsString()
-  @MinLength(8)
-  password: string;
 }

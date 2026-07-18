@@ -59,12 +59,14 @@ enum InvoiceStatus {
 model Tenant {
   id                   String       @id @default(cuid())
   name                 String
+  category             String?
   logoUrl              String?
   currency             String       @default("EUR")
   siret                String?
   pdfTemplate          String?
   plan                 PlanType     @default(FREE)
   status               TenantStatus @default(PENDING)
+  rejectionReason      String?
   stripeCustomerId     String?
   stripeSubscriptionId String?
   createdAt            DateTime     @default(now())
@@ -99,14 +101,31 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  mustChangePassword  Boolean   @default(false)
+
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  sessions   Session[]
-  activities Activity[]
+  sessions         Session[]
+  activities       Activity[]
+  securityQuestions SecurityQuestion[]
 
   @@index([tenantId])
   @@map("users")
+}
+
+model SecurityQuestion {
+  id         String @id @default(cuid())
+  question   String
+  answerHash String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, question])
+  @@map("security_questions")
 }
 
 model Session {
