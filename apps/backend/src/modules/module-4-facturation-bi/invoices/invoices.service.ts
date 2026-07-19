@@ -6,8 +6,9 @@ import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
 export class InvoicesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  findAll(contactId?: string) {
     return this.prisma.db.invoice.findMany({
+      where: contactId ? { contactId } : undefined,
       include: { contact: true, lines: true },
       orderBy: { createdAt: 'desc' },
     });

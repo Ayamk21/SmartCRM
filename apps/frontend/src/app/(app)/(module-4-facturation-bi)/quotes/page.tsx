@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Download, Plus, Trash2 } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,23 +28,29 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { PageHeader } from "@/components/layout/page-header";
-import { apiFetch, apiFetchBlob, ApiError } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
-
-type QuoteStatus = "DRAFT" | "VALIDATED" | "CONVERTED";
-type InvoiceStatus = "DRAFT" | "SENT" | "PAID";
+import {
+  QUOTE_STATUS_LABEL,
+  QUOTE_STATUS_STYLE,
+  INVOICE_STATUS_LABEL,
+  INVOICE_STATUS_STYLE,
+  documentTotal,
+  downloadDocument,
+  type QuoteStatus,
+  type InvoiceStatus,
+  type DocumentLine,
+} from "@/modules/module-4-facturation-bi/lib/documents";
+import {
+  QuoteLinesEditor,
+  EMPTY_LINE,
+  type LineDraft,
+} from "@/modules/module-4-facturation-bi/components/quote-line-editor";
 
 interface Contact {
   id: string;
   firstName: string;
   lastName: string | null;
-}
-
-interface DocumentLine {
-  id: string;
-  description: string;
-  quantity: number;
-  unitPrice: string;
 }
 
 interface Quote {
@@ -66,137 +72,6 @@ interface Invoice {
   issueDate: string;
   contact: Contact;
   lines: DocumentLine[];
-}
-
-const QUOTE_STATUS_LABEL: Record<QuoteStatus, string> = {
-  DRAFT: "Brouillon",
-  VALIDATED: "Validé",
-  CONVERTED: "Converti",
-};
-
-const QUOTE_STATUS_STYLE: Record<QuoteStatus, string> = {
-  DRAFT: "bg-secondary text-secondary-foreground",
-  VALIDATED: "bg-chart-2/15 text-chart-2",
-  CONVERTED: "bg-success/15 text-success",
-};
-
-const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
-  DRAFT: "Brouillon",
-  SENT: "Envoyée",
-  PAID: "Payée",
-};
-
-const INVOICE_STATUS_STYLE: Record<InvoiceStatus, string> = {
-  DRAFT: "bg-secondary text-secondary-foreground",
-  SENT: "bg-chart-2/15 text-chart-2",
-  PAID: "bg-success/15 text-success",
-};
-
-function lineTotal(line: { quantity: number; unitPrice: string | number }) {
-  return line.quantity * Number(line.unitPrice);
-}
-
-function quoteTotal(lines: DocumentLine[]) {
-  return lines.reduce((sum, line) => sum + lineTotal(line), 0);
-}
-
-async function downloadDocument(
-  path: string,
-  filename: string,
-  accessToken: string | null,
-) {
-  try {
-    const blob = await apiFetchBlob(path, { accessToken });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
-  } catch {
-    toast.error("Impossible de générer le PDF.");
-  }
-}
-
-interface LineDraft {
-  description: string;
-  quantity: string;
-  unitPrice: string;
-}
-
-const EMPTY_LINE: LineDraft = { description: "", quantity: "1", unitPrice: "" };
-
-function QuoteLinesEditor({
-  lines,
-  onChange,
-}: {
-  lines: LineDraft[];
-  onChange: (lines: LineDraft[]) => void;
-}) {
-  function updateLine(index: number, patch: Partial<LineDraft>) {
-    onChange(lines.map((line, i) => (i === index ? { ...line, ...patch } : line)));
-  }
-  function addLine() {
-    onChange([...lines, { ...EMPTY_LINE }]);
-  }
-  function removeLine(index: number) {
-    onChange(lines.filter((_, i) => i !== index));
-  }
-
-  const total = lines.reduce(
-    (sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0),
-    0,
-  );
-
-  return (
-    <div className="flex flex-col gap-2.5">
-      <Label>Lignes</Label>
-      {lines.map((line, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <Input
-            placeholder="Description"
-            value={line.description}
-            onChange={(e) => updateLine(i, { description: e.target.value })}
-            className="flex-1"
-            required
-          />
-          <Input
-            type="number"
-            min="0"
-            step="1"
-            value={line.quantity}
-            onChange={(e) => updateLine(i, { quantity: e.target.value })}
-            className="w-16"
-            required
-          />
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="Prix"
-            value={line.unitPrice}
-            onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
-            className="w-24"
-            required
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => removeLine(i)}
-            disabled={lines.length === 1}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ))}
-      <Button type="button" variant="outline" size="sm" className="self-start" onClick={addLine}>
-        <Plus className="h-3.5 w-3.5" />
-        Ajouter une ligne
-      </Button>
-      <div className="flex items-center justify-end gap-2 border-t border-border/60 pt-2 text-sm">
-        <span className="font-medium text-muted-foreground">Total</span>
-        <span className="font-mono font-semibold">{total.toLocaleString("fr-FR")} €</span>
-      </div>
-    </div>
-  );
 }
 
 function QuotesTab({ contacts }: { contacts: Contact[] }) {
@@ -382,7 +257,7 @@ function QuotesTab({ contacts }: { contacts: Contact[] }) {
                     {quote.contact.firstName} {quote.contact.lastName}
                   </span>
                   <span className="ml-auto font-mono text-sm font-semibold">
-                    {quoteTotal(quote.lines).toLocaleString("fr-FR")} €
+                    {documentTotal(quote.lines).toLocaleString("fr-FR")} €
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -390,9 +265,7 @@ function QuotesTab({ contacts }: { contacts: Contact[] }) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      downloadDocument(`/quotes/${quote.id}/pdf`, `${quote.number}.pdf`, accessToken)
-                    }
+                    onClick={() => downloadDocument(`/quotes/${quote.id}/pdf`, accessToken)}
                   >
                     <Download className="h-3.5 w-3.5" />
                     PDF
@@ -504,7 +377,7 @@ function InvoicesTab() {
                 {invoice.contact.firstName} {invoice.contact.lastName}
               </span>
               <span className="ml-auto font-mono text-sm font-semibold">
-                {quoteTotal(invoice.lines).toLocaleString("fr-FR")} €
+                {documentTotal(invoice.lines).toLocaleString("fr-FR")} €
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -512,9 +385,7 @@ function InvoicesTab() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  downloadDocument(`/invoices/${invoice.id}/pdf`, `${invoice.number}.pdf`, accessToken)
-                }
+                onClick={() => downloadDocument(`/invoices/${invoice.id}/pdf`, accessToken)}
               >
                 <Download className="h-3.5 w-3.5" />
                 PDF

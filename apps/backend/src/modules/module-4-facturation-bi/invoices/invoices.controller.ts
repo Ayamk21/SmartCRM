@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Patch, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Query, StreamableFile } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { PdfService } from '../pdf/pdf.service';
 import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
@@ -11,8 +11,8 @@ export class InvoicesController {
   ) {}
 
   @Get()
-  findAll() {
-    return this.invoicesService.findAll();
+  findAll(@Query('contactId') contactId?: string) {
+    return this.invoicesService.findAll(contactId);
   }
 
   @Get(':id')

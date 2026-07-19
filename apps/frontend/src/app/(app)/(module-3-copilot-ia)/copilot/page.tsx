@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Lock, Sparkles, Trash2 } from "lucide-react";
+import { Lock, Save, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,21 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
@@ -21,13 +36,60 @@ interface QuoteLine {
   unitPrice: number;
 }
 
+interface Contact {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+}
+
 function QuoteGeneratorTool() {
   const { accessToken } = useAuth();
   const [prompt, setPrompt] = useState("");
   const [lines, setLines] = useState<QuoteLine[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [isSaveOpen, setIsSaveOpen] = useState(false);
+  const [saveContactId, setSaveContactId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   const total = lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    apiFetch<Contact[]>("/contacts", { accessToken }).catch(() => []).then((data) => {
+      if (data) setContacts(data);
+    });
+  }, [accessToken]);
+
+  async function handleSaveAsQuote(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken || !saveContactId) return;
+    setIsSaving(true);
+    try {
+      await apiFetch("/quotes", {
+        method: "POST",
+        accessToken,
+        body: JSON.stringify({
+          contactId: saveContactId,
+          lines: lines.map((line) => ({
+            description: line.description,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+          })),
+        }),
+      });
+      toast.success("Devis enregistré — retrouve-le dans Devis & Factures.");
+      setIsSaveOpen(false);
+      setSaveContactId(null);
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError ? error.message : "Échec de l'enregistrement du devis.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   async function handleGenerate(event: FormEvent) {
     event.preventDefault();
@@ -130,17 +192,56 @@ function QuoteGeneratorTool() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 flex items-center justify-end gap-3 border-t border-border/60 pt-3">
-              <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Total
-              </span>
-              <span className="text-lg font-bold tabular-nums">
-                {total.toLocaleString("fr-FR")} €
-              </span>
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsSaveOpen(true)}>
+                <Save className="h-3.5 w-3.5" />
+                Enregistrer comme devis
+              </Button>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Total
+                </span>
+                <span className="text-lg font-bold tabular-nums">
+                  {total.toLocaleString("fr-FR")} €
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={isSaveOpen} onOpenChange={setIsSaveOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enregistrer comme devis</DialogTitle>
+            <DialogDescription>
+              Choisis le contact auquel rattacher ce devis.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveAsQuote} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="saveContact">Contact</Label>
+              <Select value={saveContactId} onValueChange={setSaveContactId}>
+                <SelectTrigger id="saveContact" className="w-full">
+                  <SelectValue placeholder="Choisir un contact" />
+                </SelectTrigger>
+                <SelectContent>
+                  {contacts.map((contact) => (
+                    <SelectItem key={contact.id} value={contact.id}>
+                      {contact.firstName} {contact.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isSaving || !saveContactId}>
+                {isSaving ? "Enregistrement..." : "Enregistrer"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

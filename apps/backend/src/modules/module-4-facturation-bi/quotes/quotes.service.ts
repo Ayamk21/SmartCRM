@@ -42,8 +42,9 @@ export class QuotesService {
     });
   }
 
-  findAll() {
+  findAll(contactId?: string) {
     return this.prisma.db.quote.findMany({
+      where: contactId ? { contactId } : undefined,
       include: { contact: true, lines: true, invoice: true, tenant: true },
       orderBy: { createdAt: 'desc' },
     });

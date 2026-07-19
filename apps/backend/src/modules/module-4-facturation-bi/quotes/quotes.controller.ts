@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   StreamableFile,
 } from '@nestjs/common';
 import { QuotesService } from './quotes.service';
@@ -27,8 +28,8 @@ export class QuotesController {
   }
 
   @Get()
-  findAll() {
-    return this.quotesService.findAll();
+  findAll(@Query('contactId') contactId?: string) {
+    return this.quotesService.findAll(contactId);
   }
 
   @Get(':id')

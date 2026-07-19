@@ -3,12 +3,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Pencil, Sparkles, FileText, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Pencil, Sparkles, FileText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -44,6 +45,22 @@ import {
   ContactFormFields,
   type ContactFormValues,
 } from "@/modules/module-2-crm-pipeline/components/contact-form-fields";
+import {
+  QuoteLinesEditor,
+  EMPTY_LINE,
+  type LineDraft,
+} from "@/modules/module-4-facturation-bi/components/quote-line-editor";
+import {
+  QUOTE_STATUS_LABEL,
+  QUOTE_STATUS_STYLE,
+  INVOICE_STATUS_LABEL,
+  INVOICE_STATUS_STYLE,
+  documentTotal,
+  downloadDocument,
+  type QuoteStatus,
+  type InvoiceStatus,
+  type DocumentLine,
+} from "@/modules/module-4-facturation-bi/lib/documents";
 import { cn } from "@/lib/utils";
 
 type DealStatus = "PROSPECT" | "QUALIFICATION" | "PROPOSITION" | "GAGNE" | "PERDU";
@@ -61,6 +78,20 @@ interface Activity {
   type: ActivityType;
   content: string;
   createdAt: string;
+}
+
+interface Quote {
+  id: string;
+  number: string;
+  status: QuoteStatus;
+  lines: DocumentLine[];
+}
+
+interface Invoice {
+  id: string;
+  number: string;
+  status: InvoiceStatus;
+  lines: DocumentLine[];
 }
 
 interface ContactDetail {
@@ -132,6 +163,15 @@ export default function ContactDetailPage() {
     null,
   );
 
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [isLoadingDocs, setIsLoadingDocs] = useState(true);
+  const [isQuoteOpen, setIsQuoteOpen] = useState(false);
+  const [isSavingQuote, setIsSavingQuote] = useState(false);
+  const [quoteLines, setQuoteLines] = useState<LineDraft[]>([{ ...EMPTY_LINE }]);
+  const [quoteNotes, setQuoteNotes] = useState("");
+  const [quoteValidUntil, setQuoteValidUntil] = useState("");
+
   useEffect(() => {
     if (!accessToken) return;
     apiFetch<ContactDetail>(`/contacts/${id}`, { accessToken })
@@ -145,6 +185,55 @@ export default function ContactDetailPage() {
       })
       .finally(() => setIsLoading(false));
   }, [accessToken, id]);
+
+  function loadDocs() {
+    if (!accessToken || !id) return;
+    setIsLoadingDocs(true);
+    Promise.all([
+      apiFetch<Quote[]>(`/quotes?contactId=${id}`, { accessToken }),
+      apiFetch<Invoice[]>(`/invoices?contactId=${id}`, { accessToken }),
+    ])
+      .then(([quotesData, invoicesData]) => {
+        setQuotes(quotesData);
+        setInvoices(invoicesData);
+      })
+      .catch(() => toast.error("Impossible de charger les devis/factures."))
+      .finally(() => setIsLoadingDocs(false));
+  }
+
+  useEffect(loadDocs, [accessToken, id]);
+
+  async function handleCreateQuote(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken || !contact) return;
+    setIsSavingQuote(true);
+    try {
+      await apiFetch<Quote>("/quotes", {
+        method: "POST",
+        accessToken,
+        body: JSON.stringify({
+          contactId: contact.id,
+          notes: quoteNotes || undefined,
+          validUntil: quoteValidUntil ? new Date(quoteValidUntil).toISOString() : undefined,
+          lines: quoteLines.map((line) => ({
+            description: line.description,
+            quantity: Number(line.quantity),
+            unitPrice: Number(line.unitPrice),
+          })),
+        }),
+      });
+      toast.success("Devis créé.");
+      setIsQuoteOpen(false);
+      setQuoteLines([{ ...EMPTY_LINE }]);
+      setQuoteNotes("");
+      setQuoteValidUntil("");
+      loadDocs();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Échec de la création du devis.");
+    } finally {
+      setIsSavingQuote(false);
+    }
+  }
 
   function openEdit() {
     if (!contact) return;
@@ -292,7 +381,7 @@ export default function ContactDetailPage() {
               <Sparkles className="h-3.5 w-3.5" />
               Relance IA
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => setIsQuoteOpen(true)}>
               <FileText className="h-3.5 w-3.5" />
               Nouveau devis
             </Button>
@@ -417,14 +506,136 @@ export default function ContactDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="devis" className="mt-4">
-          <Card className="border-border/60 shadow-sm">
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Le module Devis &amp; Factures arrive en Phase 5.
-            </CardContent>
-          </Card>
+        <TabsContent value="devis" className="mt-4 flex flex-col gap-4">
+          {isLoadingDocs ? (
+            <Skeleton className="h-24 w-full rounded-xl" />
+          ) : (
+            <>
+              <Card className="border-border/60 shadow-sm">
+                <CardContent className="py-4">
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Devis
+                  </h2>
+                  {quotes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucun devis pour ce contact.</p>
+                  ) : (
+                    <div className="flex flex-col">
+                      {quotes.map((quote) => (
+                        <div
+                          key={quote.id}
+                          className="flex items-center gap-3 border-b border-border/60 py-2.5 text-sm last:border-b-0"
+                        >
+                          <span className="font-mono font-medium">{quote.number}</span>
+                          <Badge className={QUOTE_STATUS_STYLE[quote.status]}>
+                            {QUOTE_STATUS_LABEL[quote.status]}
+                          </Badge>
+                          <span className="ml-auto font-mono text-xs text-muted-foreground">
+                            {documentTotal(quote.lines).toLocaleString("fr-FR")} €
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => downloadDocument(`/quotes/${quote.id}/pdf`, accessToken)}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/60 shadow-sm">
+                <CardContent className="py-4">
+                  <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Factures
+                  </h2>
+                  {invoices.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Aucune facture pour ce contact.
+                    </p>
+                  ) : (
+                    <div className="flex flex-col">
+                      {invoices.map((invoice) => (
+                        <div
+                          key={invoice.id}
+                          className="flex items-center gap-3 border-b border-border/60 py-2.5 text-sm last:border-b-0"
+                        >
+                          <span className="font-mono font-medium">{invoice.number}</span>
+                          <Badge className={INVOICE_STATUS_STYLE[invoice.status]}>
+                            {INVOICE_STATUS_LABEL[invoice.status]}
+                          </Badge>
+                          <span className="ml-auto font-mono text-xs text-muted-foreground">
+                            {documentTotal(invoice.lines).toLocaleString("fr-FR")} €
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() =>
+                              downloadDocument(`/invoices/${invoice.id}/pdf`, accessToken)
+                            }
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={isQuoteOpen}
+        onOpenChange={(open) => {
+          setIsQuoteOpen(open);
+          if (!open) {
+            setQuoteLines([{ ...EMPTY_LINE }]);
+            setQuoteNotes("");
+            setQuoteValidUntil("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nouveau devis</DialogTitle>
+            <DialogDescription>
+              Pour {contact.firstName} {contact.lastName} — détaille les lignes de la prestation.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateQuote} className="flex flex-col gap-4">
+            <QuoteLinesEditor lines={quoteLines} onChange={setQuoteLines} />
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="quoteValidUntil">Valable jusqu&apos;au (optionnel)</Label>
+              <Input
+                id="quoteValidUntil"
+                type="date"
+                value={quoteValidUntil}
+                onChange={(e) => setQuoteValidUntil(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="quoteNotes">Notes (optionnel)</Label>
+              <Textarea
+                id="quoteNotes"
+                value={quoteNotes}
+                onChange={(e) => setQuoteNotes(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isSavingQuote}>
+                {isSavingQuote ? "Création..." : "Créer le devis"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="sm:max-w-md">
