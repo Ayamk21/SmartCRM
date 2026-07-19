@@ -55,6 +55,37 @@ export class EmailService {
     );
   }
 
+  async sendTeamInviteEmail(
+    to: string,
+    tenantName: string,
+    role: string,
+    tempPassword: string,
+  ) {
+    await this.send(
+      to,
+      `Invitation a rejoindre ${tenantName} sur Smart CRM Copilot`,
+      `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2>Tu as ete invite(e) 👋</h2>
+          <p>Tu as ete ajoute(e) au workspace <strong>${tenantName}</strong> avec le role <strong>${role}</strong>.</p>
+          <p>Voici tes identifiants de connexion :</p>
+          <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+            <tr>
+              <td style="padding: 8px; background: #f3f4f6;"><strong>Email</strong></td>
+              <td style="padding: 8px; background: #f3f4f6;">${to}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px;"><strong>Mot de passe temporaire</strong></td>
+              <td style="padding: 8px; font-family: monospace;">${tempPassword}</td>
+            </tr>
+          </table>
+          <p>Ce mot de passe est temporaire : il te sera demande de le changer des ta premiere connexion.</p>
+          <a href="${this.frontendUrl}/login" style="display:inline-block; margin-top: 12px; padding: 10px 16px; background: #4f46e5; color: white; border-radius: 8px; text-decoration: none;">Se connecter</a>
+        </div>
+      `,
+    );
+  }
+
   async sendAccountRejectedEmail(to: string, tenantName: string, reason: string) {
     await this.send(
       to,

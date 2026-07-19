@@ -251,6 +251,7 @@ export default function CopilotPage() {
             </p>
             <Button
               render={<Link href="/workspace" />}
+              nativeButton={false}
               className="mt-2 bg-ai text-ai-foreground hover:bg-ai/90"
             >
               Passer en Pro

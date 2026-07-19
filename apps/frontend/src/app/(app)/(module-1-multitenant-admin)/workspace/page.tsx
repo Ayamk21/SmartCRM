@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Trash2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -32,10 +32,29 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
 import { SECURITY_QUESTIONS } from "@/modules/module-1-multitenant-admin/lib/security-questions";
+
+interface Member {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: "ADMIN" | "COLLABORATOR";
+  createdAt: string;
+}
 
 const PDF_TEMPLATES = [
   { value: "classique", label: "Classique" },
@@ -84,6 +103,21 @@ export default function WorkspacePage() {
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
+  const [members, setMembers] = useState<Member[]>([]);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteForm, setInviteForm] = useState({
+    email: "",
+    firstName: "",
+    lastName: "",
+    role: "COLLABORATOR" as "ADMIN" | "COLLABORATOR",
+  });
+  const [invitedTempPassword, setInvitedTempPassword] = useState<{
+    email: string;
+    tempPassword: string;
+  } | null>(null);
+  const [removingMember, setRemovingMember] = useState<Member | null>(null);
+
   useEffect(() => {
     if (!accessToken) return;
     apiFetch<Workspace>("/workspace", { accessToken })
@@ -100,6 +134,15 @@ export default function WorkspacePage() {
       .catch(() => toast.error("Impossible de charger le workspace."))
       .finally(() => setIsLoading(false));
   }, [accessToken]);
+
+  function loadMembers() {
+    if (!accessToken || !isAdmin) return;
+    apiFetch<Member[]>("/workspace/members", { accessToken })
+      .then(setMembers)
+      .catch(() => toast.error("Impossible de charger l'équipe."));
+  }
+
+  useEffect(loadMembers, [accessToken, isAdmin]);
 
   useEffect(() => {
     const upgrade = searchParams.get("upgrade");
@@ -180,6 +223,49 @@ export default function WorkspacePage() {
       toast.error(error instanceof ApiError ? error.message : "Échec de la suppression.");
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  async function handleInvite(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken) return;
+    setIsInviting(true);
+    try {
+      const created = await apiFetch<Member & { tempPassword: string }>("/workspace/members", {
+        method: "POST",
+        accessToken,
+        body: JSON.stringify({
+          email: inviteForm.email,
+          role: inviteForm.role,
+          firstName: inviteForm.firstName || undefined,
+          lastName: inviteForm.lastName || undefined,
+        }),
+      });
+      setMembers((prev) => [...prev, created]);
+      setInvitedTempPassword({ email: created.email, tempPassword: created.tempPassword });
+      setInviteForm({ email: "", firstName: "", lastName: "", role: "COLLABORATOR" });
+      setIsInviteOpen(false);
+      toast.success("Membre invité — un email avec ses identifiants a été envoyé.");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Échec de l'invitation.");
+    } finally {
+      setIsInviting(false);
+    }
+  }
+
+  async function handleRemoveMember() {
+    if (!accessToken || !removingMember) return;
+    try {
+      await apiFetch(`/workspace/members/${removingMember.id}`, {
+        method: "DELETE",
+        accessToken,
+      });
+      setMembers((prev) => prev.filter((m) => m.id !== removingMember.id));
+      toast.success("Membre retiré.");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Échec du retrait.");
+    } finally {
+      setRemovingMember(null);
     }
   }
 
@@ -362,6 +448,133 @@ export default function WorkspacePage() {
         </CardContent>
       </Card>
 
+      {isAdmin && (
+        <Card className="border-border/60 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Équipe</CardTitle>
+              <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+                <DialogTrigger render={<Button size="sm" />}>
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Inviter
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Inviter un membre</DialogTitle>
+                    <DialogDescription>
+                      Un email avec un mot de passe temporaire lui sera envoyé.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleInvite} className="flex flex-col gap-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="inviteFirstName">Prénom</Label>
+                        <Input
+                          id="inviteFirstName"
+                          value={inviteForm.firstName}
+                          onChange={(e) =>
+                            setInviteForm((f) => ({ ...f, firstName: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="inviteLastName">Nom</Label>
+                        <Input
+                          id="inviteLastName"
+                          value={inviteForm.lastName}
+                          onChange={(e) =>
+                            setInviteForm((f) => ({ ...f, lastName: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="inviteEmail">Email</Label>
+                      <Input
+                        id="inviteEmail"
+                        type="email"
+                        required
+                        value={inviteForm.email}
+                        onChange={(e) =>
+                          setInviteForm((f) => ({ ...f, email: e.target.value }))
+                        }
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="inviteRole">Rôle</Label>
+                      <Select
+                        value={inviteForm.role}
+                        onValueChange={(value) =>
+                          value &&
+                          setInviteForm((f) => ({
+                            ...f,
+                            role: value as "ADMIN" | "COLLABORATOR",
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="inviteRole" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="COLLABORATOR">Collaborateur</SelectItem>
+                          <SelectItem value="ADMIN">Administrateur</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit" disabled={isInviting}>
+                        {isInviting ? "Envoi..." : "Envoyer l'invitation"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <CardDescription>Les membres de ton workspace et leurs rôles.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {members.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Aucun autre membre pour l&apos;instant.
+              </p>
+            ) : (
+              <div className="flex flex-col">
+                {members.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center gap-3 border-b border-border/60 py-2.5 text-sm last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium">
+                        {member.firstName || member.lastName
+                          ? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()
+                          : member.email}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {member.email}
+                      </div>
+                    </div>
+                    <Badge variant="secondary" className="ml-auto shrink-0">
+                      {member.role === "ADMIN" ? "Administrateur" : "Collaborateur"}
+                    </Badge>
+                    {member.id !== user?.id && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setRemovingMember(member)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Questions de sécurité</CardTitle>
@@ -506,6 +719,58 @@ export default function WorkspacePage() {
           </Dialog>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={invitedTempPassword !== null}
+        onOpenChange={(open) => !open && setInvitedTempPassword(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Membre invité</DialogTitle>
+            <DialogDescription>
+              Identifiants générés — utile si l&apos;email n&apos;a pas pu être livré.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 text-sm">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium uppercase text-muted-foreground">Email</span>
+              <span className="font-mono">{invitedTempPassword?.email}</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
+                Mot de passe temporaire
+              </span>
+              <span className="font-mono text-base font-semibold">
+                {invitedTempPassword?.tempPassword}
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setInvitedTempPassword(null)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={removingMember !== null}
+        onOpenChange={(open) => !open && setRemovingMember(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Retirer ce membre ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {removingMember?.email} n&apos;aura plus accès à ce workspace. Cette action est
+              irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleRemoveMember}>
+              Retirer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
