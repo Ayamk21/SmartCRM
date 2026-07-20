@@ -84,6 +84,7 @@ interface Quote {
   id: string;
   number: string;
   status: QuoteStatus;
+  deal: { id: string; title: string } | null;
   lines: DocumentLine[];
 }
 
@@ -168,6 +169,7 @@ export default function ContactDetailPage() {
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
   const [isQuoteOpen, setIsQuoteOpen] = useState(false);
   const [isSavingQuote, setIsSavingQuote] = useState(false);
+  const [quoteDealId, setQuoteDealId] = useState<string | null>(null);
   const [quoteLines, setQuoteLines] = useState<LineDraft[]>([{ ...EMPTY_LINE }]);
   const [quoteNotes, setQuoteNotes] = useState("");
   const [quoteValidUntil, setQuoteValidUntil] = useState("");
@@ -213,6 +215,7 @@ export default function ContactDetailPage() {
         accessToken,
         body: JSON.stringify({
           contactId: contact.id,
+          dealId: quoteDealId || undefined,
           notes: quoteNotes || undefined,
           validUntil: quoteValidUntil ? new Date(quoteValidUntil).toISOString() : undefined,
           lines: quoteLines.map((line) => ({
@@ -224,6 +227,7 @@ export default function ContactDetailPage() {
       });
       toast.success("Devis créé.");
       setIsQuoteOpen(false);
+      setQuoteDealId(null);
       setQuoteLines([{ ...EMPTY_LINE }]);
       setQuoteNotes("");
       setQuoteValidUntil("");
@@ -529,6 +533,11 @@ export default function ContactDetailPage() {
                           <Badge className={QUOTE_STATUS_STYLE[quote.status]}>
                             {QUOTE_STATUS_LABEL[quote.status]}
                           </Badge>
+                          {quote.deal && (
+                            <span className="text-xs text-muted-foreground">
+                              · {quote.deal.title}
+                            </span>
+                          )}
                           <span className="ml-auto font-mono text-xs text-muted-foreground">
                             {documentTotal(quote.lines).toLocaleString("fr-FR")} €
                           </span>
@@ -596,6 +605,7 @@ export default function ContactDetailPage() {
         onOpenChange={(open) => {
           setIsQuoteOpen(open);
           if (!open) {
+            setQuoteDealId(null);
             setQuoteLines([{ ...EMPTY_LINE }]);
             setQuoteNotes("");
             setQuoteValidUntil("");
@@ -610,6 +620,23 @@ export default function ContactDetailPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateQuote} className="flex flex-col gap-4">
+            {contact.deals.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="quoteDeal">Opportunité liée (optionnel)</Label>
+                <Select value={quoteDealId} onValueChange={setQuoteDealId}>
+                  <SelectTrigger id="quoteDeal" className="w-full">
+                    <SelectValue placeholder="Aucune opportunité" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contact.deals.map((deal) => (
+                      <SelectItem key={deal.id} value={deal.id}>
+                        {deal.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <QuoteLinesEditor lines={quoteLines} onChange={setQuoteLines} />
             <div className="flex flex-col gap-2">
               <Label htmlFor="quoteValidUntil">Valable jusqu&apos;au (optionnel)</Label>

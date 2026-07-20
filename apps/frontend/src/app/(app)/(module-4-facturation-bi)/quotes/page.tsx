@@ -53,6 +53,12 @@ interface Contact {
   lastName: string | null;
 }
 
+interface Deal {
+  id: string;
+  title: string;
+  contactId: string;
+}
+
 interface Quote {
   id: string;
   number: string;
@@ -61,6 +67,7 @@ interface Quote {
   validUntil: string | null;
   notes: string | null;
   contact: Contact;
+  deal: Deal | null;
   lines: DocumentLine[];
   invoice: { id: string } | null;
 }
@@ -74,17 +81,20 @@ interface Invoice {
   lines: DocumentLine[];
 }
 
-function QuotesTab({ contacts }: { contacts: Contact[] }) {
+function QuotesTab({ contacts, deals }: { contacts: Contact[]; deals: Deal[] }) {
   const { accessToken } = useAuth();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [contactId, setContactId] = useState<string | null>(null);
+  const [dealId, setDealId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [validUntil, setValidUntil] = useState("");
   const [lines, setLines] = useState<LineDraft[]>([{ ...EMPTY_LINE }]);
   const [busyQuoteId, setBusyQuoteId] = useState<string | null>(null);
+
+  const contactDeals = deals.filter((d) => d.contactId === contactId);
 
   function loadQuotes() {
     if (!accessToken) return;
@@ -98,6 +108,7 @@ function QuotesTab({ contacts }: { contacts: Contact[] }) {
 
   function resetForm() {
     setContactId(null);
+    setDealId(null);
     setNotes("");
     setValidUntil("");
     setLines([{ ...EMPTY_LINE }]);
@@ -113,6 +124,7 @@ function QuotesTab({ contacts }: { contacts: Contact[] }) {
         accessToken,
         body: JSON.stringify({
           contactId,
+          dealId: dealId || undefined,
           notes: notes || undefined,
           validUntil: validUntil ? new Date(validUntil).toISOString() : undefined,
           lines: lines.map((line) => ({
@@ -199,7 +211,13 @@ function QuotesTab({ contacts }: { contacts: Contact[] }) {
           <form onSubmit={handleCreate} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="contact">Contact</Label>
-              <Select value={contactId} onValueChange={setContactId}>
+              <Select
+                value={contactId}
+                onValueChange={(value) => {
+                  setContactId(value);
+                  setDealId(null);
+                }}
+              >
                 <SelectTrigger id="contact" className="w-full">
                   <SelectValue placeholder="Choisir un contact" />
                 </SelectTrigger>
@@ -212,6 +230,23 @@ function QuotesTab({ contacts }: { contacts: Contact[] }) {
                 </SelectContent>
               </Select>
             </div>
+            {contactId && contactDeals.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="deal">Opportunité liée (optionnel)</Label>
+                <Select value={dealId} onValueChange={setDealId}>
+                  <SelectTrigger id="deal" className="w-full">
+                    <SelectValue placeholder="Aucune opportunité" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contactDeals.map((deal) => (
+                      <SelectItem key={deal.id} value={deal.id}>
+                        {deal.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <QuoteLinesEditor lines={lines} onChange={setLines} />
             <div className="flex flex-col gap-2">
               <Label htmlFor="validUntil">Valable jusqu&apos;au (optionnel)</Label>
@@ -256,6 +291,9 @@ function QuotesTab({ contacts }: { contacts: Contact[] }) {
                   <span className="text-sm text-muted-foreground">
                     {quote.contact.firstName} {quote.contact.lastName}
                   </span>
+                  {quote.deal && (
+                    <span className="text-xs text-muted-foreground">· {quote.deal.title}</span>
+                  )}
                   <span className="ml-auto font-mono text-sm font-semibold">
                     {documentTotal(quote.lines).toLocaleString("fr-FR")} €
                   </span>
@@ -416,11 +454,15 @@ function InvoicesTab() {
 export default function QuotesInvoicesPage() {
   const { accessToken } = useAuth();
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
 
   useEffect(() => {
     if (!accessToken) return;
     apiFetch<Contact[]>("/contacts", { accessToken }).catch(() => []).then((data) => {
       if (data) setContacts(data);
+    });
+    apiFetch<Deal[]>("/deals", { accessToken }).catch(() => []).then((data) => {
+      if (data) setDeals(data);
     });
   }, [accessToken]);
 
@@ -437,7 +479,7 @@ export default function QuotesInvoicesPage() {
           <TabsTrigger value="factures">Factures</TabsTrigger>
         </TabsList>
         <TabsContent value="devis" className="mt-4">
-          <QuotesTab contacts={contacts} />
+          <QuotesTab contacts={contacts} deals={deals} />
         </TabsContent>
         <TabsContent value="factures" className="mt-4">
           <InvoicesTab />

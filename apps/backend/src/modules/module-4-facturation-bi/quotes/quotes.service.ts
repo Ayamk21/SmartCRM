@@ -50,7 +50,7 @@ export class QuotesService {
   findAll(contactId?: string) {
     return this.prisma.db.quote.findMany({
       where: contactId ? { contactId } : undefined,
-      include: { contact: true, lines: true, invoice: true, tenant: true },
+      include: { contact: true, lines: true, invoice: true, tenant: true, deal: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -58,7 +58,7 @@ export class QuotesService {
   async findOne(id: string) {
     const quote = await this.prisma.db.quote.findUnique({
       where: { id },
-      include: { contact: true, lines: true, invoice: true, tenant: true },
+      include: { contact: true, lines: true, invoice: true, tenant: true, deal: true },
     });
     if (!quote) {
       throw new NotFoundException('Devis introuvable.');
