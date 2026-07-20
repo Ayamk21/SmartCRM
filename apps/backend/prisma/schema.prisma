@@ -56,6 +56,11 @@ enum InvoiceStatus {
   PAID
 }
 
+enum OtpChannel {
+  EMAIL
+  SMS
+}
+
 model Tenant {
   id                   String       @id @default(cuid())
   name                 String
@@ -95,6 +100,7 @@ model PlatformAdmin {
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
+  phone     String?
   password  String
   firstName String?
   lastName  String?
@@ -109,13 +115,29 @@ model User {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  sessions         Session[]
-  activities       Activity[]
+  sessions          Session[]
+  activities        Activity[]
   securityQuestions SecurityQuestion[]
-  memberships      Membership[]
+  memberships       Membership[]
+  passwordResetOtps PasswordResetOtp[]
 
   @@index([tenantId])
   @@map("users")
+}
+
+model PasswordResetOtp {
+  id         String    @id @default(cuid())
+  channel    OtpChannel
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_otps")
 }
 
 model Membership {

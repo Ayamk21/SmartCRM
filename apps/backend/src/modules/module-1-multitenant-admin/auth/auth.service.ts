@@ -9,6 +9,8 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
+import { EmailService } from '../../../shared/email/email.service';
+import { SmsService } from '../../../shared/sms/sms.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -16,11 +18,13 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { SwitchCompanyDto } from './dto/switch-company.dto';
 import { CreateCompanyDto } from './dto/create-company.dto';
+import { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import {
   SetSecurityQuestionsDto,
   VerifySecurityAnswersDto,
 } from './dto/security-question.dto';
-import { generateTempPassword } from './password-policy';
+import { generateTempPassword, generateOtpCode } from './password-policy';
 
 interface IssuedTokens {
   accessToken: string;
@@ -53,6 +57,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
+    private readonly smsService: SmsService,
   ) {
     this.refreshTtlDays = Number(
       this.configService.get<string>('REFRESH_TOKEN_TTL_DAYS') ?? '30',
@@ -268,6 +274,31 @@ export class AuthService {
     return this.switchCompany(userId, { tenantId: tenant.id });
   }
 
+  async getProfile(userId: string) {
+    const user = await this.prisma.raw.user.findUniqueOrThrow({ where: { id: userId } });
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+    };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const user = await this.prisma.raw.user.update({
+      where: { id: userId },
+      data: { phone: dto.phone },
+    });
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+    };
+  }
+
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
     const user = await this.prisma.raw.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -358,6 +389,64 @@ export class AuthService {
         throw new UnauthorizedException('Reponses incorrectes.');
       }
     }
+
+    const resetToken = await this.jwtService.signAsync(
+      { sub: user.id, purpose: PASSWORD_RESET_TOKEN_PURPOSE },
+      { expiresIn: '15m' },
+    );
+    return { resetToken };
+  }
+
+  async requestPasswordResetOtp(dto: RequestOtpDto): Promise<void> {
+    const user = await this.prisma.raw.user.findUnique({ where: { email: dto.email } });
+    if (!user) {
+      return;
+    }
+
+    if (dto.channel === 'SMS' && !user.phone) {
+      throw new ConflictException(
+        "Aucun numero de telephone enregistre pour ce compte. Utilise l'email ou les questions de securite.",
+      );
+    }
+
+    const code = generateOtpCode();
+    const codeHash = await bcrypt.hash(code, 10);
+    await this.prisma.raw.passwordResetOtp.create({
+      data: {
+        userId: user.id,
+        channel: dto.channel,
+        codeHash,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    if (dto.channel === 'EMAIL') {
+      await this.emailService.sendPasswordResetOtpEmail(user.email, code);
+    } else {
+      await this.smsService.sendOtpSms(user.phone!, code);
+    }
+  }
+
+  async verifyPasswordResetOtp(dto: VerifyOtpDto): Promise<{ resetToken: string }> {
+    const user = await this.prisma.raw.user.findUnique({ where: { email: dto.email } });
+    if (!user) {
+      throw new UnauthorizedException('Code invalide ou expire.');
+    }
+
+    const otp = await this.prisma.raw.passwordResetOtp.findFirst({
+      where: { userId: user.id, consumedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const valid = otp ? await bcrypt.compare(dto.code, otp.codeHash) : false;
+    if (!otp || !valid) {
+      throw new UnauthorizedException('Code invalide ou expire.');
+    }
+
+    await this.prisma.raw.passwordResetOtp.update({
+      where: { id: otp.id },
+      data: { consumedAt: new Date() },
+    });
 
     const resetToken = await this.jwtService.signAsync(
       { sub: user.id, purpose: PASSWORD_RESET_TOKEN_PURPOSE },

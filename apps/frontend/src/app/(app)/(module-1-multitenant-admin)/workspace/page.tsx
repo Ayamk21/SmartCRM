@@ -90,6 +90,9 @@ export default function WorkspacePage() {
     pdfTemplate: "classique",
   });
 
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profilePhone, setProfilePhone] = useState("");
+
   const [isSavingSecurity, setIsSavingSecurity] = useState(false);
   const [securityForm, setSecurityForm] = useState({
     question1: SECURITY_QUESTIONS[0],
@@ -135,6 +138,13 @@ export default function WorkspacePage() {
       .finally(() => setIsLoading(false));
   }, [accessToken]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+    apiFetch<{ phone: string | null }>("/auth/profile", { accessToken })
+      .then((data) => setProfilePhone(data.phone ?? ""))
+      .catch(() => {});
+  }, [accessToken]);
+
   function loadMembers() {
     if (!accessToken || !isAdmin) return;
     apiFetch<Member[]>("/workspace/members", { accessToken })
@@ -175,6 +185,24 @@ export default function WorkspacePage() {
       toast.error(error instanceof ApiError ? error.message : "Échec de la mise à jour.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleProfileSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!accessToken) return;
+    setIsSavingProfile(true);
+    try {
+      await apiFetch("/auth/profile", {
+        method: "PATCH",
+        accessToken,
+        body: JSON.stringify({ phone: profilePhone || undefined }),
+      });
+      toast.success("Numéro de téléphone enregistré.");
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Échec de l'enregistrement.");
+    } finally {
+      setIsSavingProfile(false);
     }
   }
 
@@ -574,6 +602,32 @@ export default function WorkspacePage() {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-border/60 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">Mon profil</CardTitle>
+          <CardDescription>
+            Ton numéro de téléphone, utilisé pour recevoir un code de vérification par SMS.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="profilePhone">Téléphone</Label>
+              <Input
+                id="profilePhone"
+                type="tel"
+                placeholder="+216 12 345 678"
+                value={profilePhone}
+                onChange={(e) => setProfilePhone(e.target.value)}
+              />
+            </div>
+            <Button type="submit" disabled={isSavingProfile} className="mt-2 self-start">
+              {isSavingProfile ? "Enregistrement..." : "Enregistrer"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card className="border-border/60 shadow-sm">
         <CardHeader>

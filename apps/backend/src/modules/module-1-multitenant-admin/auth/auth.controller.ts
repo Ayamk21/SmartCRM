@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Req,
   Res,
@@ -29,6 +30,8 @@ import {
   SetSecurityQuestionsDto,
   VerifySecurityAnswersDto,
 } from './dto/security-question.dto';
+import { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 const REFRESH_COOKIE = 'refreshToken';
 
@@ -85,6 +88,17 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return user;
+  }
+
+  @Get('profile')
+  getProfile(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.getProfile(user.sub);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Patch('profile')
+  updateProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
+    return this.authService.updateProfile(user.sub, dto);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -157,6 +171,21 @@ export class AuthController {
   @Post('recover/verify-security-answers')
   verifySecurityAnswers(@Body() dto: VerifySecurityAnswersDto) {
     return this.authService.verifySecurityAnswers(dto);
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('recover/request-otp')
+  async requestOtp(@Body() dto: RequestOtpDto) {
+    await this.authService.requestPasswordResetOtp(dto);
+    return { ok: true };
+  }
+
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('recover/verify-otp')
+  verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyPasswordResetOtp(dto);
   }
 
   @Public()

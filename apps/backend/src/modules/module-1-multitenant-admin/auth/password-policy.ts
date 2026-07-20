@@ -25,3 +25,7 @@ export function generateTempPassword(length = 12): string {
   }
   return chars.join('');
 }
+
+export function generateOtpCode(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, '0');
+}

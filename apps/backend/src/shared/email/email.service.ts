@@ -21,12 +21,29 @@ export class EmailService {
     });
   }
 
-  private async send(to: string, subject: string, html: string) {
+  private async send(to: string, subject: string, html: string): Promise<boolean> {
     try {
       await this.transporter.sendMail({ from: this.fromEmail, to, subject, html });
+      return true;
     } catch (error) {
       this.logger.error(`Echec de l'envoi d'email a ${to}`, error as Error);
+      return false;
     }
+  }
+
+  async sendPasswordResetOtpEmail(to: string, code: string): Promise<boolean> {
+    return this.send(
+      to,
+      'Ton code de verification Smart CRM Copilot',
+      `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2>Code de verification</h2>
+          <p>Voici ton code pour reinitialiser ton mot de passe :</p>
+          <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px; text-align: center; padding: 16px; background: #f3f4f6; border-radius: 8px;">${code}</p>
+          <p>Ce code expire dans 10 minutes. Si tu n'as pas demande cette reinitialisation, ignore cet email.</p>
+        </div>
+      `,
+    );
   }
 
   async sendAccountApprovedEmail(to: string, tenantName: string, tempPassword: string) {
