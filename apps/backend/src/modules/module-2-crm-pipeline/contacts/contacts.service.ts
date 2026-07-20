@@ -1,14 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
+import { PlanLimitsService } from '../../../shared/plan/plan-limits.service';
 import type { Prisma } from '../../../../generated/prisma/client';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 
 @Injectable()
 export class ContactsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly planLimits: PlanLimitsService,
+  ) {}
 
-  create(dto: CreateContactDto) {
+  async create(dto: CreateContactDto) {
+    await this.planLimits.assertContactLimit();
     return this.prisma.db.contact.create({
       data: dto as Prisma.ContactUncheckedCreateInput,
     });

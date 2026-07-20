@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
 import { EmailService } from '../../../shared/email/email.service';
+import { PlanLimitsService } from '../../../shared/plan/plan-limits.service';
 import { generateTempPassword } from '../auth/password-policy';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
@@ -11,6 +12,7 @@ export class WorkspaceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly planLimits: PlanLimitsService,
   ) {}
 
   async getWorkspace(tenantId: string) {
@@ -47,6 +49,7 @@ export class WorkspaceService {
   }
 
   async inviteMember(tenantId: string, dto: InviteMemberDto) {
+    await this.planLimits.assertTeamLimit();
     const tenant = await this.getWorkspace(tenantId);
 
     const existing = await this.prisma.raw.user.findUnique({ where: { email: dto.email } });

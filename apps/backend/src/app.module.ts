@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './shared/prisma/prisma.module';
 import { EmailModule } from './shared/email/email.module';
+import { PlanLimitsModule } from './shared/plan/plan-limits.module';
 import { TenantModule } from './shared/tenant/tenant.module';
 import { TenantContextInterceptor } from './shared/tenant/tenant-context.interceptor';
 import { AuthModule } from './modules/module-1-multitenant-admin/auth/auth.module';
@@ -29,6 +30,7 @@ import { ReportingModule } from './modules/module-4-facturation-bi/reporting/rep
     TenantModule,
     PrismaModule,
     EmailModule,
+    PlanLimitsModule,
     AuthModule,
     WorkspaceModule,
     AdminModule,

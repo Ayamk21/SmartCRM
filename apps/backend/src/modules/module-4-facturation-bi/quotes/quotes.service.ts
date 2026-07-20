@@ -1,12 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../shared/prisma/prisma.service';
+import { PlanLimitsService } from '../../../shared/plan/plan-limits.service';
 import type { Prisma } from '../../../../generated/prisma/client';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { UpdateQuoteDto } from './dto/update-quote.dto';
 
 @Injectable()
 export class QuotesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly planLimits: PlanLimitsService,
+  ) {}
 
   private async nextNumber(prefix: 'DEVIS' | 'FACT') {
     const count =
@@ -17,6 +21,7 @@ export class QuotesService {
   }
 
   async create(dto: CreateQuoteDto) {
+    await this.planLimits.assertQuoteLimit();
     const contact = await this.prisma.db.contact.findUnique({ where: { id: dto.contactId } });
     if (!contact) {
       throw new NotFoundException('Contact introuvable.');
