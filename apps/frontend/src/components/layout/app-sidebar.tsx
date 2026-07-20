@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth, type AuthUser } from "@/modules/module-1-multitenant-admin/lib/auth-context";
+import { CompanySwitcher } from "@/modules/module-1-multitenant-admin/components/company-switcher";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,6 +56,7 @@ export function AppSidebar({ user }: { user: AuthUser }) {
         </span>
         <span className="text-sm font-bold tracking-tight">Smart CRM Copilot</span>
       </div>
+      <CompanySwitcher user={user} />
       <nav className="flex flex-col gap-1 px-3">
         {NAV_ITEMS.filter((item) => !item.adminOnly || user.role === "ADMIN").map(
           (item) => {

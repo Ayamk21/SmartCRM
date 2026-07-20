@@ -22,6 +22,9 @@ import { SignupDto } from './dto/signup.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { SwitchCompanyDto } from './dto/switch-company.dto';
+import { CreateCompanyDto } from './dto/create-company.dto';
+import { Roles } from './decorators/roles.decorator';
 import {
   SetSecurityQuestionsDto,
   VerifySecurityAnswersDto,
@@ -103,6 +106,36 @@ export class AuthController {
     await this.authService.deleteAccount(user.sub, dto);
     res.clearCookie(REFRESH_COOKIE);
     return { ok: true };
+  }
+
+  @Get('companies')
+  listCompanies(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.listCompanies(user.sub);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('switch-company')
+  async switchCompany(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SwitchCompanyDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.switchCompany(user.sub, dto);
+    this.setRefreshCookie(res, result.refreshToken);
+    return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Roles('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @Post('companies')
+  async createCompany(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateCompanyDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.createCompany(user.sub, dto);
+    this.setRefreshCookie(res, result.refreshToken);
+    return { accessToken: result.accessToken, user: result.user };
   }
 
   @Post('security-questions')

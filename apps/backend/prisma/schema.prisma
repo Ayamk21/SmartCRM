@@ -72,12 +72,13 @@ model Tenant {
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
-  users      User[]
-  contacts   Contact[]
-  deals      Deal[]
-  activities Activity[]
-  quotes     Quote[]
-  invoices   Invoice[]
+  users       User[]
+  memberships Membership[]
+  contacts    Contact[]
+  deals       Deal[]
+  activities  Activity[]
+  quotes      Quote[]
+  invoices    Invoice[]
 
   @@map("tenants")
 }
@@ -111,9 +112,29 @@ model User {
   sessions         Session[]
   activities       Activity[]
   securityQuestions SecurityQuestion[]
+  memberships      Membership[]
 
   @@index([tenantId])
   @@map("users")
+}
+
+model Membership {
+  id      String @id @default(cuid())
+  role    Role   @default(COLLABORATOR)
+  isOwner Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([userId])
+  @@index([tenantId])
+  @@map("memberships")
 }
 
 model SecurityQuestion {

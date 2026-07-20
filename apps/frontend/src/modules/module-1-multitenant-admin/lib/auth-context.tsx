@@ -14,6 +14,7 @@ export interface AuthUser {
   id: string;
   email: string;
   role: "ADMIN" | "COLLABORATOR";
+  tenantId: string;
   mustChangePassword: boolean;
 }
 
@@ -34,6 +35,8 @@ interface AuthContextValue {
   signup: (tenantName: string, category: string, email: string) => Promise<void>;
   logout: () => Promise<void>;
   markPasswordChanged: () => void;
+  switchCompany: (tenantId: string) => Promise<void>;
+  createCompany: (name: string, category: string) => Promise<void>;
 }
 
 interface SignupResponse {
@@ -93,9 +96,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => (prev ? { ...prev, mustChangePassword: false } : prev));
   }, []);
 
+  const switchCompany = useCallback(async (tenantId: string) => {
+    const data = await apiFetch<RefreshResponse>("/auth/switch-company", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({ tenantId }),
+    });
+    setAccessToken(data.accessToken);
+    setUser(data.user);
+  }, [accessToken]);
+
+  const createCompany = useCallback(async (name: string, category: string) => {
+    const data = await apiFetch<RefreshResponse>("/auth/companies", {
+      method: "POST",
+      accessToken,
+      body: JSON.stringify({ name, category }),
+    });
+    setAccessToken(data.accessToken);
+    setUser(data.user);
+  }, [accessToken]);
+
   return (
     <AuthContext.Provider
-      value={{ user, accessToken, isLoading, login, signup, logout, markPasswordChanged }}
+      value={{
+        user,
+        accessToken,
+        isLoading,
+        login,
+        signup,
+        logout,
+        markPasswordChanged,
+        switchCompany,
+        createCompany,
+      }}
     >
       {children}
     </AuthContext.Provider>

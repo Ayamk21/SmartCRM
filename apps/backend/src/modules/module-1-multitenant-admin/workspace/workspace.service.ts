@@ -77,6 +77,10 @@ export class WorkspaceService {
       },
     });
 
+    await this.prisma.raw.membership.create({
+      data: { userId: user.id, tenantId, role: dto.role, isOwner: dto.role === 'ADMIN' },
+    });
+
     await this.emailService.sendTeamInviteEmail(dto.email, tenant.name, dto.role, tempPassword);
 
     return { ...user, tempPassword };

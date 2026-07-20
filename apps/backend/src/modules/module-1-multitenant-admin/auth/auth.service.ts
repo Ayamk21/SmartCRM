@@ -14,6 +14,8 @@ import { SignupDto } from './dto/signup.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { SwitchCompanyDto } from './dto/switch-company.dto';
+import { CreateCompanyDto } from './dto/create-company.dto';
 import {
   SetSecurityQuestionsDto,
   VerifySecurityAnswersDto,
@@ -26,7 +28,13 @@ interface IssuedTokens {
 }
 
 interface IssuedTokensWithUser extends IssuedTokens {
-  user: { id: string; email: string; role: string; mustChangePassword: boolean };
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    tenantId: string;
+    mustChangePassword: boolean;
+  };
 }
 
 const MAX_LOGIN_ATTEMPTS = 3;
@@ -77,6 +85,9 @@ export class AuthService {
           role: 'ADMIN',
           tenantId: tenant.id,
         },
+      });
+      await tx.membership.create({
+        data: { userId: user.id, tenantId: tenant.id, role: 'ADMIN', isOwner: true },
       });
       return { tenant, user };
     });
@@ -157,6 +168,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         role: user.role,
+        tenantId: user.tenantId,
         mustChangePassword: user.mustChangePassword,
       },
       isPlatformAdmin: false as const,
@@ -190,6 +202,7 @@ export class AuthService {
         id: session.user.id,
         email: session.user.email,
         role: session.user.role,
+        tenantId: session.user.tenantId,
         mustChangePassword: session.user.mustChangePassword,
       },
     };
@@ -201,6 +214,58 @@ export class AuthService {
       where: { tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  async listCompanies(userId: string) {
+    const memberships = await this.prisma.raw.membership.findMany({
+      where: { userId },
+      include: { tenant: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return memberships.map((m) => ({
+      tenantId: m.tenantId,
+      name: m.tenant.name,
+      role: m.role,
+      isOwner: m.isOwner,
+      status: m.tenant.status,
+    }));
+  }
+
+  async switchCompany(userId: string, dto: SwitchCompanyDto): Promise<IssuedTokensWithUser> {
+    const membership = await this.prisma.raw.membership.findUnique({
+      where: { userId_tenantId: { userId, tenantId: dto.tenantId } },
+    });
+    if (!membership) {
+      throw new ForbiddenException("Vous n'appartenez pas a cette societe.");
+    }
+
+    await this.prisma.raw.user.update({
+      where: { id: userId },
+      data: { tenantId: dto.tenantId, role: membership.role },
+    });
+
+    const tokens = await this.issueSession(userId, dto.tenantId, membership.role);
+    const user = await this.prisma.raw.user.findUniqueOrThrow({ where: { id: userId } });
+    return {
+      ...tokens,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        tenantId: user.tenantId,
+        mustChangePassword: user.mustChangePassword,
+      },
+    };
+  }
+
+  async createCompany(userId: string, dto: CreateCompanyDto): Promise<IssuedTokensWithUser> {
+    const tenant = await this.prisma.raw.tenant.create({
+      data: { name: dto.name, category: dto.category, plan: 'FREE', status: 'ACTIVE' },
+    });
+    await this.prisma.raw.membership.create({
+      data: { userId, tenantId: tenant.id, role: 'ADMIN', isOwner: true },
+    });
+    return this.switchCompany(userId, { tenantId: tenant.id });
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
@@ -230,7 +295,17 @@ export class AuthService {
     }
 
     if (user.role === 'ADMIN') {
-      await this.prisma.raw.tenant.delete({ where: { id: user.tenantId } });
+      const currentTenantId = user.tenantId;
+      const otherMembership = await this.prisma.raw.membership.findFirst({
+        where: { userId, tenantId: { not: currentTenantId } },
+      });
+      if (otherMembership) {
+        await this.prisma.raw.user.update({
+          where: { id: userId },
+          data: { tenantId: otherMembership.tenantId, role: otherMembership.role },
+        });
+      }
+      await this.prisma.raw.tenant.delete({ where: { id: currentTenantId } });
     } else {
       await this.prisma.raw.user.delete({ where: { id: userId } });
     }
