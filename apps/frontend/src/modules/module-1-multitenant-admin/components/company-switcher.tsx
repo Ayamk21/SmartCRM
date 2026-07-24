@@ -113,7 +113,8 @@ export function CompanySwitcher({ user }: { user: AuthUser }) {
           <DialogHeader>
             <DialogTitle>Nouvelle société</DialogTitle>
             <DialogDescription>
-              Crée un nouveau workspace dont tu seras propriétaire.
+              Crée un nouveau workspace dont tu seras propriétaire. Au moins une de tes
+              sociétés actuelles doit être en plan Pro pour en créer une nouvelle.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="flex flex-col gap-4">

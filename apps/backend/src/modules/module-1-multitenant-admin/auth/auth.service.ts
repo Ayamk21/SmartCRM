@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -265,6 +266,17 @@ export class AuthService {
   }
 
   async createCompany(userId: string, dto: CreateCompanyDto): Promise<IssuedTokensWithUser> {
+    const memberships = await this.prisma.raw.membership.findMany({
+      where: { userId },
+      include: { tenant: true },
+    });
+    const hasProCompany = memberships.some((m) => m.tenant.plan === 'PRO');
+    if (!hasProCompany) {
+      throw new ForbiddenException(
+        "Passe au moins une de tes societes en plan Pro pour pouvoir en creer une nouvelle.",
+      );
+    }
+
     const tenant = await this.prisma.raw.tenant.create({
       data: { name: dto.name, category: dto.category, plan: 'FREE', status: 'ACTIVE' },
     });
@@ -423,7 +435,13 @@ export class AuthService {
     if (dto.channel === 'EMAIL') {
       await this.emailService.sendPasswordResetOtpEmail(user.email, code);
     } else {
-      await this.smsService.sendOtpSms(user.phone!, code);
+      try {
+        await this.smsService.sendOtpSms(user.phone!, code);
+      } catch {
+        throw new ServiceUnavailableException(
+          "Impossible d'envoyer le SMS. Verifie que ton numero est autorise cote operateur, ou utilise l'email.",
+        );
+      }
     }
   }
 

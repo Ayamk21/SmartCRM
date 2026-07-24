@@ -3,7 +3,17 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Sparkles, Trash2, UserPlus } from "lucide-react";
+import {
+  AlertTriangle,
+  Building2,
+  CreditCard,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  User,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -347,7 +357,7 @@ export default function WorkspacePage() {
   }
 
   return (
-    <div className="max-w-lg space-y-5">
+    <div className="max-w-2xl space-y-6">
       <PageHeader
         title="Paramètres du workspace"
         description="Profil de votre agence, visible sur vos devis et factures."
@@ -356,7 +366,12 @@ export default function WorkspacePage() {
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Abonnement</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <CreditCard className="h-3.5 w-3.5" />
+              </span>
+              Abonnement
+            </CardTitle>
             <Badge
               className={
                 workspace.plan === "PRO"
@@ -395,7 +410,12 @@ export default function WorkspacePage() {
 
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Informations générales</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <Building2 className="h-3.5 w-3.5" />
+            </span>
+            Informations générales
+          </CardTitle>
           {!isAdmin && (
             <CardDescription>
               Lecture seule — réservé aux administrateurs pour modifier.
@@ -404,44 +424,48 @@ export default function WorkspacePage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="name">Nom de l&apos;agence</Label>
-              <Input
-                id="name"
-                required
-                disabled={!isAdmin}
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">Nom de l&apos;agence</Label>
+                <Input
+                  id="name"
+                  required
+                  disabled={!isAdmin}
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="currency">Devise</Label>
+                <Input
+                  id="currency"
+                  disabled={!isAdmin}
+                  value={form.currency}
+                  onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="currency">Devise</Label>
-              <Input
-                id="currency"
-                disabled={!isAdmin}
-                value={form.currency}
-                onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="siret">SIRET</Label>
-              <Input
-                id="siret"
-                disabled={!isAdmin}
-                value={form.siret}
-                onChange={(e) => setForm((f) => ({ ...f, siret: e.target.value }))}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="logoUrl">URL du logo</Label>
-              <Input
-                id="logoUrl"
-                type="url"
-                disabled={!isAdmin}
-                placeholder="https://..."
-                value={form.logoUrl}
-                onChange={(e) => setForm((f) => ({ ...f, logoUrl: e.target.value }))}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="siret">SIRET</Label>
+                <Input
+                  id="siret"
+                  disabled={!isAdmin}
+                  value={form.siret}
+                  onChange={(e) => setForm((f) => ({ ...f, siret: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="logoUrl">URL du logo</Label>
+                <Input
+                  id="logoUrl"
+                  type="url"
+                  disabled={!isAdmin}
+                  placeholder="https://..."
+                  value={form.logoUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, logoUrl: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="pdfTemplate">Modèle de template PDF</Label>
@@ -480,7 +504,12 @@ export default function WorkspacePage() {
         <Card className="border-border/60 shadow-sm">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Équipe</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Users className="h-3.5 w-3.5" />
+                </span>
+                Équipe
+              </CardTitle>
               <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
                 <DialogTrigger render={<Button size="sm" />}>
                   <UserPlus className="h-3.5 w-3.5" />
@@ -567,36 +596,42 @@ export default function WorkspacePage() {
               </p>
             ) : (
               <div className="flex flex-col">
-                {members.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center gap-3 border-b border-border/60 py-2.5 text-sm last:border-b-0"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-medium">
-                        {member.firstName || member.lastName
-                          ? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()
-                          : member.email}
+                {members.map((member) => {
+                  const displayName =
+                    member.firstName || member.lastName
+                      ? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()
+                      : member.email;
+                  const initials = displayName.slice(0, 2).toUpperCase();
+                  return (
+                    <div
+                      key={member.id}
+                      className="flex items-center gap-3 border-b border-border/60 py-2.5 text-sm last:border-b-0"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+                        {initials}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-medium">{displayName}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {member.email}
+                        </div>
                       </div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {member.email}
-                      </div>
+                      <Badge variant="secondary" className="ml-auto shrink-0">
+                        {member.role === "ADMIN" ? "Administrateur" : "Collaborateur"}
+                      </Badge>
+                      {member.id !== user?.id && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setRemovingMember(member)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
-                    <Badge variant="secondary" className="ml-auto shrink-0">
-                      {member.role === "ADMIN" ? "Administrateur" : "Collaborateur"}
-                    </Badge>
-                    {member.id !== user?.id && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setRemovingMember(member)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -605,7 +640,12 @@ export default function WorkspacePage() {
 
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Mon profil</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <User className="h-3.5 w-3.5" />
+            </span>
+            Mon profil
+          </CardTitle>
           <CardDescription>
             Ton numéro de téléphone, utilisé pour recevoir un code de vérification par SMS.
           </CardDescription>
@@ -631,13 +671,19 @@ export default function WorkspacePage() {
 
       <Card className="border-border/60 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Questions de sécurité</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <ShieldCheck className="h-3.5 w-3.5" />
+            </span>
+            Questions de sécurité
+          </CardTitle>
           <CardDescription>
             Utilisées pour récupérer ton compte en cas de mot de passe oublié.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSecuritySubmit} className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="question1">Question 1</Label>
               <Select
@@ -690,6 +736,7 @@ export default function WorkspacePage() {
                 onChange={(e) => setSecurityForm((f) => ({ ...f, answer2: e.target.value }))}
               />
             </div>
+            </div>
             <Button type="submit" disabled={isSavingSecurity} className="mt-2 self-start">
               {isSavingSecurity ? "Enregistrement..." : "Enregistrer mes questions"}
             </Button>
@@ -699,7 +746,12 @@ export default function WorkspacePage() {
 
       <Card className="border-destructive/40 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base text-destructive">Zone de danger</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base text-destructive">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-3.5 w-3.5" />
+            </span>
+            Zone de danger
+          </CardTitle>
           <CardDescription>
             {isAdmin
               ? "Supprime définitivement ton compte et tout le workspace (contacts, deals, devis, factures...)."
