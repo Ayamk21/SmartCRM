@@ -13,6 +13,7 @@ import {
   User,
   UserPlus,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +55,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { apiFetch, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/modules/module-1-multitenant-admin/lib/auth-context";
 import { SECURITY_QUESTIONS } from "@/modules/module-1-multitenant-admin/lib/security-questions";
 
@@ -82,11 +84,15 @@ interface Workspace {
   plan: "FREE" | "PRO";
 }
 
+type SectionId = "subscription" | "general" | "team" | "profile" | "security" | "danger";
+
 export default function WorkspacePage() {
   const { user, accessToken, logout } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  const [activeSection, setActiveSection] = useState<SectionId>("subscription");
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -356,475 +362,516 @@ export default function WorkspacePage() {
     return <p className="text-sm text-muted-foreground">Workspace introuvable.</p>;
   }
 
+  const sections: { id: SectionId; label: string; icon: LucideIcon }[] = [
+    { id: "subscription", label: "Abonnement", icon: CreditCard },
+    { id: "general", label: "Général", icon: Building2 },
+    ...(isAdmin ? [{ id: "team" as const, label: "Équipe", icon: Users }] : []),
+    { id: "profile", label: "Mon profil", icon: User },
+    { id: "security", label: "Sécurité", icon: ShieldCheck },
+    { id: "danger", label: "Zone de danger", icon: AlertTriangle },
+  ];
+
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="max-w-5xl space-y-6">
       <PageHeader
         title="Paramètres du workspace"
         description="Profil de votre agence, visible sur vos devis et factures."
       />
 
-      <Card className="border-border/60 shadow-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <CreditCard className="h-3.5 w-3.5" />
-              </span>
-              Abonnement
-            </CardTitle>
-            <Badge
-              className={
-                workspace.plan === "PRO"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground"
-              }
-            >
-              {workspace.plan}
-            </Badge>
-          </div>
-          <CardDescription>
-            {workspace.plan === "FREE"
-              ? "Plan limité. Passez en Pro pour un usage illimité."
-              : "Plan illimité, merci pour votre confiance."}
-          </CardDescription>
-        </CardHeader>
-        {isAdmin && (
-          <CardContent>
-            {workspace.plan === "FREE" ? (
-              <Button
-                onClick={handleUpgrade}
-                disabled={isRedirecting}
-                className="bg-ai text-ai-foreground hover:bg-ai/90"
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute -top-24 right-0 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
+          <div className="absolute top-52 -left-16 h-56 w-56 rounded-full bg-ai/15 blur-3xl" />
+        </div>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <nav className="flex gap-1.5 overflow-x-auto pb-1 lg:sticky lg:top-20 lg:w-56 lg:shrink-0 lg:flex-col lg:overflow-visible lg:pb-0">
+          {sections.map((section) => {
+            const Icon = section.icon;
+            const isActive = activeSection === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setActiveSection(section.id)}
+                className={cn(
+                  "flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium transition-all",
+                  isActive
+                    ? section.id === "danger"
+                      ? "bg-destructive/10 text-destructive shadow-sm shadow-destructive/10 ring-1 ring-destructive/15"
+                      : "bg-gradient-to-r from-primary/10 to-ai/10 text-primary shadow-sm shadow-primary/10 ring-1 ring-primary/15"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
               >
-                <Sparkles className="h-4 w-4" />
-                {isRedirecting ? "Redirection..." : "Passer en Pro"}
-              </Button>
-            ) : (
-              <Button variant="outline" onClick={handleManageBilling} disabled={isRedirecting}>
-                {isRedirecting ? "Redirection..." : "Gérer l'abonnement"}
-              </Button>
-            )}
-          </CardContent>
-        )}
-      </Card>
-
-      <Card className="border-border/60 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <Building2 className="h-3.5 w-3.5" />
-            </span>
-            Informations générales
-          </CardTitle>
-          {!isAdmin && (
-            <CardDescription>
-              Lecture seule — réservé aux administrateurs pour modifier.
-            </CardDescription>
-          )}
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="name">Nom de l&apos;agence</Label>
-                <Input
-                  id="name"
-                  required
-                  disabled={!isAdmin}
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="currency">Devise</Label>
-                <Input
-                  id="currency"
-                  disabled={!isAdmin}
-                  value={form.currency}
-                  onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="siret">SIRET</Label>
-                <Input
-                  id="siret"
-                  disabled={!isAdmin}
-                  value={form.siret}
-                  onChange={(e) => setForm((f) => ({ ...f, siret: e.target.value }))}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="logoUrl">URL du logo</Label>
-                <Input
-                  id="logoUrl"
-                  type="url"
-                  disabled={!isAdmin}
-                  placeholder="https://..."
-                  value={form.logoUrl}
-                  onChange={(e) => setForm((f) => ({ ...f, logoUrl: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="pdfTemplate">Modèle de template PDF</Label>
-              <Select
-                disabled={!isAdmin}
-                value={form.pdfTemplate}
-                onValueChange={(value) =>
-                  value && setForm((f) => ({ ...f, pdfTemplate: value }))
-                }
-              >
-                <SelectTrigger id="pdfTemplate" className="w-full">
-                  <SelectValue placeholder="Choisir un modèle" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PDF_TEMPLATES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Utilisé pour vos devis et factures (moteur PDF en Phase 5).
-              </p>
-            </div>
-            {isAdmin && (
-              <Button type="submit" disabled={isSaving} className="mt-2 self-start">
-                {isSaving ? "Enregistrement..." : "Enregistrer"}
-              </Button>
-            )}
-          </form>
-        </CardContent>
-      </Card>
-
-      {isAdmin && (
-        <Card className="border-border/60 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <Users className="h-3.5 w-3.5" />
+                <span
+                  className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors",
+                    isActive
+                      ? section.id === "danger"
+                        ? "bg-destructive/15 text-destructive"
+                        : "bg-gradient-to-br from-primary to-ai text-primary-foreground"
+                      : "text-muted-foreground/70",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
                 </span>
-                Équipe
-              </CardTitle>
-              <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-                <DialogTrigger render={<Button size="sm" />}>
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Inviter
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Inviter un membre</DialogTitle>
-                    <DialogDescription>
-                      Un email avec un mot de passe temporaire lui sera envoyé.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleInvite} className="flex flex-col gap-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="inviteFirstName">Prénom</Label>
-                        <Input
-                          id="inviteFirstName"
-                          value={inviteForm.firstName}
-                          onChange={(e) =>
-                            setInviteForm((f) => ({ ...f, firstName: e.target.value }))
-                          }
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Label htmlFor="inviteLastName">Nom</Label>
-                        <Input
-                          id="inviteLastName"
-                          value={inviteForm.lastName}
-                          onChange={(e) =>
-                            setInviteForm((f) => ({ ...f, lastName: e.target.value }))
-                          }
-                        />
-                      </div>
-                    </div>
+                {section.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div key={activeSection} className="min-w-0 flex-1 animate-in fade-in-0 slide-in-from-right-1 duration-200">
+          {activeSection === "subscription" && (
+            <Card className="border-border/60 shadow-sm">
+              <div className="h-1 w-full bg-gradient-to-r from-ai via-ai/40 to-transparent" />
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Abonnement</CardTitle>
+                  <Badge
+                    className={
+                      workspace.plan === "PRO"
+                        ? "bg-gradient-to-r from-primary to-ai text-primary-foreground shadow-sm shadow-primary/30"
+                        : "bg-secondary text-secondary-foreground"
+                    }
+                  >
+                    {workspace.plan}
+                  </Badge>
+                </div>
+                <CardDescription>
+                  {workspace.plan === "FREE"
+                    ? "Plan limité. Passez en Pro pour un usage illimité."
+                    : "Plan illimité, merci pour votre confiance."}
+                </CardDescription>
+              </CardHeader>
+              {isAdmin && (
+                <CardContent>
+                  {workspace.plan === "FREE" ? (
+                    <Button
+                      onClick={handleUpgrade}
+                      disabled={isRedirecting}
+                      className="bg-ai text-ai-foreground hover:bg-ai/90"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {isRedirecting ? "Redirection..." : "Passer en Pro"}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={handleManageBilling} disabled={isRedirecting}>
+                      {isRedirecting ? "Redirection..." : "Gérer l'abonnement"}
+                    </Button>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          )}
+
+          {activeSection === "general" && (
+            <Card className="border-border/60 shadow-sm">
+              <div className="h-1 w-full bg-gradient-to-r from-primary via-primary/40 to-transparent" />
+              <CardHeader>
+                <CardTitle className="text-base">Informations générales</CardTitle>
+                {!isAdmin && (
+                  <CardDescription>
+                    Lecture seule — réservé aux administrateurs pour modifier.
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor="inviteEmail">Email</Label>
+                      <Label htmlFor="name">Nom de l&apos;agence</Label>
                       <Input
-                        id="inviteEmail"
-                        type="email"
+                        id="name"
                         required
-                        value={inviteForm.email}
-                        onChange={(e) =>
-                          setInviteForm((f) => ({ ...f, email: e.target.value }))
-                        }
+                        disabled={!isAdmin}
+                        value={form.name}
+                        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor="inviteRole">Rôle</Label>
+                      <Label htmlFor="currency">Devise</Label>
+                      <Input
+                        id="currency"
+                        disabled={!isAdmin}
+                        value={form.currency}
+                        onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="siret">SIRET</Label>
+                      <Input
+                        id="siret"
+                        disabled={!isAdmin}
+                        value={form.siret}
+                        onChange={(e) => setForm((f) => ({ ...f, siret: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="logoUrl">URL du logo</Label>
+                      <Input
+                        id="logoUrl"
+                        type="url"
+                        disabled={!isAdmin}
+                        placeholder="https://..."
+                        value={form.logoUrl}
+                        onChange={(e) => setForm((f) => ({ ...f, logoUrl: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="pdfTemplate">Modèle de template PDF</Label>
+                    <Select
+                      disabled={!isAdmin}
+                      value={form.pdfTemplate}
+                      onValueChange={(value) =>
+                        value && setForm((f) => ({ ...f, pdfTemplate: value }))
+                      }
+                    >
+                      <SelectTrigger id="pdfTemplate" className="w-full">
+                        <SelectValue placeholder="Choisir un modèle" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PDF_TEMPLATES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Utilisé pour vos devis et factures (moteur PDF en Phase 5).
+                    </p>
+                  </div>
+                  {isAdmin && (
+                    <Button type="submit" disabled={isSaving} className="mt-2 self-start">
+                      {isSaving ? "Enregistrement..." : "Enregistrer"}
+                    </Button>
+                  )}
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeSection === "team" && isAdmin && (
+            <Card className="border-border/60 shadow-sm">
+              <div className="h-1 w-full bg-gradient-to-r from-primary via-primary/40 to-transparent" />
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Équipe</CardTitle>
+                  <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+                    <DialogTrigger render={<Button size="sm" />}>
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Inviter
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Inviter un membre</DialogTitle>
+                        <DialogDescription>
+                          Un email avec un mot de passe temporaire lui sera envoyé.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <form onSubmit={handleInvite} className="flex flex-col gap-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="inviteFirstName">Prénom</Label>
+                            <Input
+                              id="inviteFirstName"
+                              value={inviteForm.firstName}
+                              onChange={(e) =>
+                                setInviteForm((f) => ({ ...f, firstName: e.target.value }))
+                              }
+                            />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Label htmlFor="inviteLastName">Nom</Label>
+                            <Input
+                              id="inviteLastName"
+                              value={inviteForm.lastName}
+                              onChange={(e) =>
+                                setInviteForm((f) => ({ ...f, lastName: e.target.value }))
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="inviteEmail">Email</Label>
+                          <Input
+                            id="inviteEmail"
+                            type="email"
+                            required
+                            value={inviteForm.email}
+                            onChange={(e) =>
+                              setInviteForm((f) => ({ ...f, email: e.target.value }))
+                            }
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="inviteRole">Rôle</Label>
+                          <Select
+                            value={inviteForm.role}
+                            onValueChange={(value) =>
+                              value &&
+                              setInviteForm((f) => ({
+                                ...f,
+                                role: value as "ADMIN" | "COLLABORATOR",
+                              }))
+                            }
+                          >
+                            <SelectTrigger id="inviteRole" className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="COLLABORATOR">Collaborateur</SelectItem>
+                              <SelectItem value="ADMIN">Administrateur</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <DialogFooter>
+                          <Button type="submit" disabled={isInviting}>
+                            {isInviting ? "Envoi..." : "Envoyer l'invitation"}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <CardDescription>Les membres de ton workspace et leurs rôles.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {members.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Aucun autre membre pour l&apos;instant.
+                  </p>
+                ) : (
+                  <div className="flex flex-col">
+                    {members.map((member) => {
+                      const displayName =
+                        member.firstName || member.lastName
+                          ? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()
+                          : member.email;
+                      const initials = displayName.slice(0, 2).toUpperCase();
+                      return (
+                        <div
+                          key={member.id}
+                          className="flex items-center gap-3 border-b border-border/60 py-2.5 text-sm last:border-b-0"
+                        >
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+                            {initials}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="font-medium">{displayName}</div>
+                            <div className="truncate text-xs text-muted-foreground">
+                              {member.email}
+                            </div>
+                          </div>
+                          <Badge variant="secondary" className="ml-auto shrink-0">
+                            {member.role === "ADMIN" ? "Administrateur" : "Collaborateur"}
+                          </Badge>
+                          {member.id !== user?.id && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setRemovingMember(member)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeSection === "profile" && (
+            <Card className="border-border/60 shadow-sm">
+              <div className="h-1 w-full bg-gradient-to-r from-primary via-primary/40 to-transparent" />
+              <CardHeader>
+                <CardTitle className="text-base">Mon profil</CardTitle>
+                <CardDescription>
+                  Ton numéro de téléphone, utilisé pour recevoir un code de vérification par SMS.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="profilePhone">Téléphone</Label>
+                    <Input
+                      id="profilePhone"
+                      type="tel"
+                      placeholder="+216 12 345 678"
+                      value={profilePhone}
+                      onChange={(e) => setProfilePhone(e.target.value)}
+                    />
+                  </div>
+                  <Button type="submit" disabled={isSavingProfile} className="mt-2 self-start">
+                    {isSavingProfile ? "Enregistrement..." : "Enregistrer"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeSection === "security" && (
+            <Card className="border-border/60 shadow-sm">
+              <div className="h-1 w-full bg-gradient-to-r from-primary via-primary/40 to-transparent" />
+              <CardHeader>
+                <CardTitle className="text-base">Questions de sécurité</CardTitle>
+                <CardDescription>
+                  Utilisées pour récupérer ton compte en cas de mot de passe oublié.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSecuritySubmit} className="flex flex-col gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="question1">Question 1</Label>
                       <Select
-                        value={inviteForm.role}
+                        value={securityForm.question1}
                         onValueChange={(value) =>
-                          value &&
-                          setInviteForm((f) => ({
-                            ...f,
-                            role: value as "ADMIN" | "COLLABORATOR",
-                          }))
+                          value && setSecurityForm((f) => ({ ...f, question1: value }))
                         }
                       >
-                        <SelectTrigger id="inviteRole" className="w-full">
+                        <SelectTrigger id="question1" className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="COLLABORATOR">Collaborateur</SelectItem>
-                          <SelectItem value="ADMIN">Administrateur</SelectItem>
+                          {SECURITY_QUESTIONS.map((q) => (
+                            <SelectItem key={q} value={q}>
+                              {q}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
+                      <Input
+                        required
+                        placeholder="Ta réponse"
+                        value={securityForm.answer1}
+                        onChange={(e) => setSecurityForm((f) => ({ ...f, answer1: e.target.value }))}
+                      />
                     </div>
-                    <DialogFooter>
-                      <Button type="submit" disabled={isInviting}>
-                        {isInviting ? "Envoi..." : "Envoyer l'invitation"}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
-            <CardDescription>Les membres de ton workspace et leurs rôles.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {members.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aucun autre membre pour l&apos;instant.
-              </p>
-            ) : (
-              <div className="flex flex-col">
-                {members.map((member) => {
-                  const displayName =
-                    member.firstName || member.lastName
-                      ? `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim()
-                      : member.email;
-                  const initials = displayName.slice(0, 2).toUpperCase();
-                  return (
-                    <div
-                      key={member.id}
-                      className="flex items-center gap-3 border-b border-border/60 py-2.5 text-sm last:border-b-0"
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
-                        {initials}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="font-medium">{displayName}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {member.email}
-                        </div>
-                      </div>
-                      <Badge variant="secondary" className="ml-auto shrink-0">
-                        {member.role === "ADMIN" ? "Administrateur" : "Collaborateur"}
-                      </Badge>
-                      {member.id !== user?.id && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setRemovingMember(member)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="question2">Question 2</Label>
+                      <Select
+                        value={securityForm.question2}
+                        onValueChange={(value) =>
+                          value && setSecurityForm((f) => ({ ...f, question2: value }))
+                        }
+                      >
+                        <SelectTrigger id="question2" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SECURITY_QUESTIONS.map((q) => (
+                            <SelectItem key={q} value={q}>
+                              {q}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        required
+                        placeholder="Ta réponse"
+                        value={securityForm.answer2}
+                        onChange={(e) => setSecurityForm((f) => ({ ...f, answer2: e.target.value }))}
+                      />
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="border-border/60 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <User className="h-3.5 w-3.5" />
-            </span>
-            Mon profil
-          </CardTitle>
-          <CardDescription>
-            Ton numéro de téléphone, utilisé pour recevoir un code de vérification par SMS.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="profilePhone">Téléphone</Label>
-              <Input
-                id="profilePhone"
-                type="tel"
-                placeholder="+216 12 345 678"
-                value={profilePhone}
-                onChange={(e) => setProfilePhone(e.target.value)}
-              />
-            </div>
-            <Button type="submit" disabled={isSavingProfile} className="mt-2 self-start">
-              {isSavingProfile ? "Enregistrement..." : "Enregistrer"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/60 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <ShieldCheck className="h-3.5 w-3.5" />
-            </span>
-            Questions de sécurité
-          </CardTitle>
-          <CardDescription>
-            Utilisées pour récupérer ton compte en cas de mot de passe oublié.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSecuritySubmit} className="flex flex-col gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="question1">Question 1</Label>
-              <Select
-                value={securityForm.question1}
-                onValueChange={(value) =>
-                  value && setSecurityForm((f) => ({ ...f, question1: value }))
-                }
-              >
-                <SelectTrigger id="question1" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SECURITY_QUESTIONS.map((q) => (
-                    <SelectItem key={q} value={q}>
-                      {q}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                required
-                placeholder="Ta réponse"
-                value={securityForm.answer1}
-                onChange={(e) => setSecurityForm((f) => ({ ...f, answer1: e.target.value }))}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="question2">Question 2</Label>
-              <Select
-                value={securityForm.question2}
-                onValueChange={(value) =>
-                  value && setSecurityForm((f) => ({ ...f, question2: value }))
-                }
-              >
-                <SelectTrigger id="question2" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SECURITY_QUESTIONS.map((q) => (
-                    <SelectItem key={q} value={q}>
-                      {q}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                required
-                placeholder="Ta réponse"
-                value={securityForm.answer2}
-                onChange={(e) => setSecurityForm((f) => ({ ...f, answer2: e.target.value }))}
-              />
-            </div>
-            </div>
-            <Button type="submit" disabled={isSavingSecurity} className="mt-2 self-start">
-              {isSavingSecurity ? "Enregistrement..." : "Enregistrer mes questions"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card className="border-destructive/40 shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base text-destructive">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-destructive/10 text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5" />
-            </span>
-            Zone de danger
-          </CardTitle>
-          <CardDescription>
-            {isAdmin
-              ? "Supprime définitivement ton compte et tout le workspace (contacts, deals, devis, factures...)."
-              : "Supprime définitivement ton compte personnel."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Dialog
-            open={isDeleteOpen}
-            onOpenChange={(open) => {
-              setIsDeleteOpen(open);
-              if (!open) {
-                setDeletePassword("");
-                setDeleteConfirmText("");
-              }
-            }}
-          >
-            <DialogTrigger render={<Button variant="destructive" />}>
-              Supprimer mon compte
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Supprimer définitivement ton compte ?</DialogTitle>
-                <DialogDescription>
-                  {isAdmin
-                    ? `Cette action supprime ${workspace.name} et toutes ses données (contacts, deals, devis, factures). C'est irréversible.`
-                    : "Cette action supprime ton compte personnel. C'est irréversible."}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleDeleteAccount} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="deletePassword">Ton mot de passe</Label>
-                  <Input
-                    id="deletePassword"
-                    type="password"
-                    required
-                    value={deletePassword}
-                    onChange={(e) => setDeletePassword(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="deleteConfirmText">
-                    Tape{" "}
-                    <span className="font-mono font-semibold">
-                      {isAdmin ? workspace.name : user?.email}
-                    </span>{" "}
-                    pour confirmer
-                  </Label>
-                  <Input
-                    id="deleteConfirmText"
-                    required
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  />
-                </div>
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    variant="destructive"
-                    disabled={
-                      isDeleting ||
-                      deleteConfirmText !== (isAdmin ? workspace.name : user?.email) ||
-                      !deletePassword
-                    }
-                  >
-                    {isDeleting ? "Suppression..." : "Supprimer définitivement"}
+                  </div>
+                  <Button type="submit" disabled={isSavingSecurity} className="mt-2 self-start">
+                    {isSavingSecurity ? "Enregistrement..." : "Enregistrer mes questions"}
                   </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </CardContent>
-      </Card>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeSection === "danger" && (
+            <Card className="border-destructive/40 shadow-sm">
+              <div className="h-1 w-full bg-gradient-to-r from-destructive via-destructive/40 to-transparent" />
+              <CardHeader>
+                <CardTitle className="text-base text-destructive">Zone de danger</CardTitle>
+                <CardDescription>
+                  {isAdmin
+                    ? "Supprime définitivement ton compte et tout le workspace (contacts, deals, devis, factures...)."
+                    : "Supprime définitivement ton compte personnel."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Dialog
+                  open={isDeleteOpen}
+                  onOpenChange={(open) => {
+                    setIsDeleteOpen(open);
+                    if (!open) {
+                      setDeletePassword("");
+                      setDeleteConfirmText("");
+                    }
+                  }}
+                >
+                  <DialogTrigger render={<Button variant="destructive" />}>
+                    Supprimer mon compte
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Supprimer définitivement ton compte ?</DialogTitle>
+                      <DialogDescription>
+                        {isAdmin
+                          ? `Cette action supprime ${workspace.name} et toutes ses données (contacts, deals, devis, factures). C'est irréversible.`
+                          : "Cette action supprime ton compte personnel. C'est irréversible."}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleDeleteAccount} className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="deletePassword">Ton mot de passe</Label>
+                        <Input
+                          id="deletePassword"
+                          type="password"
+                          required
+                          value={deletePassword}
+                          onChange={(e) => setDeletePassword(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="deleteConfirmText">
+                          Tape{" "}
+                          <span className="font-mono font-semibold">
+                            {isAdmin ? workspace.name : user?.email}
+                          </span>{" "}
+                          pour confirmer
+                        </Label>
+                        <Input
+                          id="deleteConfirmText"
+                          required
+                          value={deleteConfirmText}
+                          onChange={(e) => setDeleteConfirmText(e.target.value)}
+                        />
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          type="submit"
+                          variant="destructive"
+                          disabled={
+                            isDeleting ||
+                            deleteConfirmText !== (isAdmin ? workspace.name : user?.email) ||
+                            !deletePassword
+                          }
+                        >
+                          {isDeleting ? "Suppression..." : "Supprimer définitivement"}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+        </div>
+      </div>
 
       <Dialog
         open={invitedTempPassword !== null}
